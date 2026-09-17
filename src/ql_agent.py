@@ -1049,8 +1049,9 @@ async def main():
     parser.add_argument("--no-cache-phase-output", dest="cache_phase_output", action="store_false")
     parser.add_argument("--model", default="sonnet-4",
                         choices=["sonnet-4", "sonnet-4.5", "gemini-2.5-pro", "gemini-2.5-flash","gpt-5"])
-    parser.add_argument("--agent", default="claude", choices=["claude", "gemini", "codex"],
-                        help="Agent backend to use")
+    parser.add_argument("--agent", default="claude", choices=["claude", "claude_cli", "gemini", "codex"],
+                        help="Agent backend to use ('claude_cli' forces Claude Code "
+                             "subscription/session auth instead of ANTHROPIC_API_KEY)")
     parser.add_argument("--ablation-mode", default="full",
                         choices=["full", "no_tools", "no_lsp", "no_docs", "no_ast"],
                         help="Ablation mode (default: full)")

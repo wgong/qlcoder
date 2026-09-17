@@ -75,6 +75,8 @@ SECURITY_QLPACK_PATH=~/codeql/qlpacks/codeql/java-queries/<version>/Security/CWE
 LIBRARY_QLPACK_PATH=~/codeql/qlpacks/codeql/java-all/<version>/semmle/code/java
 ```
 
+> **Using `--agent claude_cli`?** It bills against your Claude Code subscription/session instead of `ANTHROPIC_API_KEY`, so you don't need that key set — instead run `claude login` (or set `CLAUDE_CODE_OAUTH_TOKEN` in `.env`) so the `claude` CLI itself is authenticated. See [Agents](#usage) below.
+
 Then start the QLCoder app and ChromaDB:
 ```sh
 docker compose up -d
@@ -186,6 +188,8 @@ SECURITY_QLPACK_PATH=~/codeql/qlpacks/codeql/java-queries/<version>/Security/CWE
 LIBRARY_QLPACK_PATH=~/codeql/qlpacks/codeql/java-all/<version>/semmle/code/java
 ```
 
+> **Using `--agent claude_cli`?** It bills against your Claude Code subscription/session instead of `ANTHROPIC_API_KEY`, so you don't need that key set — instead run `claude login` (or set `CLAUDE_CODE_OAUTH_TOKEN` in `.env`) so the `claude` CLI itself is authenticated. See [Agents](#usage) below.
+
 #### Step 5: Retrieve CVE repositories
 
 The CVE must be listed in `data/project_info.csv`. This clones the repository at the buggy commit and generates the fix diff.
@@ -269,7 +273,7 @@ Below are the available configurations for QLCoder.
 
 **Models** (`--model`): `sonnet-4` (default), `sonnet-4.5` (Claude); `gemini-2.5-pro`, `gemini-2.5-flash` (Gemini); `gpt-5` (Codex) 
 
-**Agents** (`--agent`): `claude` (default), `gemini` (Gemini CLI), `codex` (OpenAI models and open source models)
+**Agents** (`--agent`): `claude` (default), `claude_cli` (same as `claude`, but strips `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` so the `claude` CLI always bills against your Claude Code subscription/session instead of the paid API), `gemini` (Gemini CLI), `codex` (OpenAI models and open source models)
 
 **Ablation modes** (`--ablation-mode`):
 

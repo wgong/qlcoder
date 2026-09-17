@@ -107,6 +107,9 @@ def create_backend(agent_type: str, model: str, logger: logging.Logger,
     if agent_type == "claude":
         from .claude_backend import ClaudeBackend
         return ClaudeBackend(model, logger, ablation_mode=ablation_mode)
+    elif agent_type == "claude_cli":
+        from .claude_cli_backend import ClaudeCLIBackend
+        return ClaudeCLIBackend(model, logger, ablation_mode=ablation_mode)
     elif agent_type == "gemini":
         from .gemini_backend import GeminiBackend
         return GeminiBackend(model, logger, ablation_mode=ablation_mode)
@@ -115,5 +118,5 @@ def create_backend(agent_type: str, model: str, logger: logging.Logger,
         return CodexBackend(model, logger, ablation_mode=ablation_mode)
     else:
         raise ValueError(
-            f"Unknown agent type: {agent_type!r}. Available: claude, gemini, codex"
+            f"Unknown agent type: {agent_type!r}. Available: claude, claude_cli, gemini, codex"
         )
