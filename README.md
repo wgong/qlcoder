@@ -271,9 +271,14 @@ Below are the available configurations for QLCoder.
 
 > **Note:** Agent support is tested against the versions listed in [Paper Environment](#paper-environment). Newer versions of coding agents may require updates to the backend. PRs adding support for newer versions, other coding agents, and more models are welcome!
 
-**Models** (`--model`): `sonnet-4` (default), `sonnet-4.5` (Claude); `gemini-2.5-pro`, `gemini-2.5-flash` (Gemini); `gpt-5` (Codex) 
+**Models** (`--model`): `sonnet-4` (default), `sonnet-4.5`, `sonnet-5` (Claude); `gemini-2.5-pro`, `gemini-2.5-flash` (Gemini); `gpt-5` (Codex). These are convenience aliases resolved to full model ids in [`claude_backend.py`](src/agent_backends/claude_backend.py#L18) — any other string (e.g. `claude-sonnet-5`, `claude-opus-4-6`) is passed straight through to the agent CLI, so newer models work without a code change.
 
-**Agents** (`--agent`): `claude` (default), `claude_cli` (same as `claude`, but strips `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` so the `claude` CLI always bills against your Claude Code subscription/session instead of the paid API), `gemini` (Gemini CLI), `codex` (OpenAI models and open source models)
+**Agents** (`--agent`, alias `--adapter`): `claude` (default), `claude_cli` (same as `claude`, but strips `ANTHROPIC_API_KEY`/`ANTHROPIC_BASE_URL` so the `claude` CLI always bills against your Claude Code subscription/session instead of the paid API), `gemini` (Gemini CLI), `codex` (OpenAI models and open source models)
+
+To run on Claude Code subscription billing instead of the paid Anthropic API:
+```sh
+./run_cve.sh CVE-2025-27818 --adapter claude_cli --model claude-sonnet-5
+```
 
 **Ablation modes** (`--ablation-mode`):
 

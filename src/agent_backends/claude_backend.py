@@ -18,6 +18,7 @@ _NO_LSP_MODES = ("no_tools", "no_lsp")
 MODELS = {
     "sonnet-4": "claude-sonnet-4-20250514",
     "sonnet-4.5": "claude-sonnet-4-5-20250929",
+    "sonnet-5": "claude-sonnet-5",
 }
 
 

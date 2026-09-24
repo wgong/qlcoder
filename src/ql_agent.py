@@ -18,10 +18,6 @@ from query_subagents_evaluation import EvaluationCalculator
 import argparse
 from datetime import datetime 
 os.environ["ANONYMIZED_TELEMETRY"] = "false"
-MODELS = {
-    'sonnet-4': "claude-sonnet-4-20250514",
-    'sonnet-4.5': "claude-sonnet-4-5-20250929"
-}
 try:
     from .utils import save_output_to_chroma, extract_phase1_sections
     from .data_types import VulnAnalysisTask
@@ -1048,10 +1044,13 @@ async def main():
     parser.add_argument("--cache-phase-output", action="store_true", default=True)
     parser.add_argument("--no-cache-phase-output", dest="cache_phase_output", action="store_false")
     parser.add_argument("--model", default="sonnet-4",
-                        choices=["sonnet-4", "sonnet-4.5", "gemini-2.5-pro", "gemini-2.5-flash","gpt-5"])
-    parser.add_argument("--agent", default="claude", choices=["claude", "claude_cli", "gemini", "codex"],
-                        help="Agent backend to use ('claude_cli' forces Claude Code "
-                             "subscription/session auth instead of ANTHROPIC_API_KEY)")
+                        help="Model alias or full model id. Known aliases: sonnet-4, sonnet-4.5, "
+                             "sonnet-5, gemini-2.5-pro, gemini-2.5-flash, gpt-5. Any other string "
+                             "(e.g. claude-sonnet-5) is passed through to the agent CLI as-is.")
+    parser.add_argument("--agent", "--adapter", dest="agent", default="claude",
+                        choices=["claude", "claude_cli", "gemini", "codex"],
+                        help="Agent backend to use ('claude_cli'/'--adapter claude_cli' forces "
+                             "Claude Code subscription/session auth instead of ANTHROPIC_API_KEY)")
     parser.add_argument("--ablation-mode", default="full",
                         choices=["full", "no_tools", "no_lsp", "no_docs", "no_ast"],
                         help="Ablation mode (default: full)")
