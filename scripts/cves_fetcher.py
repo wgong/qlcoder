@@ -367,7 +367,7 @@ def populate_chroma_collection(api_key: Optional[str] = None, batch_size: int = 
 
     return collection
 
-if __name__ == "__main__":
+def main(argv=None):
     import sys
     import argparse
 
@@ -381,7 +381,7 @@ if __name__ == "__main__":
                        help='Fetch CVE descriptions and save to this JSON file (for no-tools ablation mode). '
                             'Skips Chroma population. Appends to existing entries.')
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.descriptions_file:
         fetch_descriptions_to_json(
@@ -440,3 +440,7 @@ if __name__ == "__main__":
                 print(f"  {idx+1}. {cve_id} (distance: {search_results['distances'][0][idx]:.4f})")
     else:
         print("No documents found in collection")
+
+
+if __name__ == "__main__":
+    main()

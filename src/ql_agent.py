@@ -1028,7 +1028,7 @@ class QLAgentIterativeCLI:
             print(f"Completed iterations: {result.get('total_iterations', 0)}")
 
 
-async def main():
+async def main(argv=None):
     """Main CLI interface"""
     parser = argparse.ArgumentParser(
         description="QLCoder Agent",
@@ -1055,7 +1055,7 @@ async def main():
                         choices=["full", "no_tools", "no_lsp", "no_docs", "no_ast"],
                         help="Ablation mode (default: full)")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     cli = QLAgentIterativeCLI(agent_type=args.agent, model=args.model,
                               ablation_mode=args.ablation_mode)

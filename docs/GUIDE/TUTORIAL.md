@@ -9,6 +9,19 @@ that: clones the CVE's repo, builds "vulnerable" and "fixed" CodeQL databases,
 extracts the AST of the fix diff, then iteratively writes and tests a CodeQL
 query until it flags the vulnerable code and not the fixed code.
 
+> **New:** a consolidated `qlcoder` command is available as a thin wrapper
+> around `python3 src/cli.py` (a click CLI that mirrors every script below
+> 1:1 — see `docs/DEV/readme-plan.md` Task #1). One-time setup:
+> ```sh
+> chmod +x bin/qlcoder
+> ln -s "$(pwd)/bin/qlcoder" ~/.local/bin/qlcoder   # ~/.local/bin must be on PATH
+> ```
+> Then e.g. `qlcoder get-cve-repos --cve CVE-2025-27818` instead of
+> `python3 scripts/get_cve_repos.py --cve CVE-2025-27818`. This tutorial uses
+> the direct `python3 scripts/...`/`python3 src/ql_agent.py` form throughout
+> since it needs no setup and matches each script's own `--help`; switch to
+> `qlcoder <command> --help` any time once it's on your `PATH`.
+
 ## 0. Prerequisites (both paths)
 
 You need, regardless of Docker vs. native:

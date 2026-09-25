@@ -30,7 +30,8 @@ RUN pip install --no-cache-dir --break-system-packages \
     pandas \
     beautifulsoup4 \
     python-dotenv \
-    requests
+    requests \
+    click
 # Remap built-in 'node' user to match host UID/GID
 ARG APP_UID=1000
 ARG APP_GID=1000

@@ -3,8 +3,11 @@
 Script to delete all Chroma collections prefixed with 'cve_analysis_'
 """
 
+import os
 import sys
 from typing import List
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.config import CHROMA_DB_PATH, get_chroma_client
 
 def get_all_collections() -> List[str]:
@@ -88,16 +91,16 @@ def delete_cve_analysis_collections(dry_run: bool = True) -> None:
         sys.exit(1)
 
 
-def main():
+def main(argv=None):
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Delete CVE analysis collections from Chroma database")
-    parser.add_argument("--confirm", action="store_true", 
+    parser.add_argument("--confirm", action="store_true",
                        help="Actually delete collections (without this flag, runs in dry-run mode)")
     parser.add_argument("--db-path", default=CHROMA_DB_PATH,
                        help=f"Path to Chroma database (default: {CHROMA_DB_PATH})")
-    
-    args = parser.parse_args()
+
+    args = parser.parse_args(argv)
 
     dry_run = not args.confirm
     delete_cve_analysis_collections(dry_run=dry_run)

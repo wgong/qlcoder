@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Thin wrapper so `qlcoder ...` works from anywhere, without pip-installing
+# this repo's modules (config, utils, etc.) as global top-level packages.
+# See docs/DEV/readme-plan.md Task #1 for why: this env has other projects
+# editable-installed with equally generic module names, and this repo's own
+# code already imports itself as bare top-level modules (see the
+# `except ImportError:` fallback in src/ql_agent.py), so a real
+# `pip install -e .` console-script entry point here would risk colliding
+# with those.
+#
+# Always execs the src/cli.py in THIS checkout, resolved via the symlink's
+# real location, so `git pull` / branch switches take effect immediately.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+exec python3 "$REPO_ROOT/src/cli.py" "$@"

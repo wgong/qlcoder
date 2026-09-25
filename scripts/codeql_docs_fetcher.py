@@ -572,20 +572,20 @@ class CodeQLDocsFetcher:
         logger.info(f"\nTotal documents in ChromaDB: {total_docs}")
 
 
-def main():
+def main(argv=None):
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="fetch of comprehensive CodeQL documentation")
-    parser.add_argument("--data-dir", help="ChromaDB data directory", 
+    parser.add_argument("--data-dir", help="ChromaDB data directory",
                        default=CHROMA_DB_PATH)
     parser.add_argument("--workers", type=int, default=8,
                        help="Number of parallel workers")
-    parser.add_argument("--local-codeql-library-path", help="Path to local CodeQL queries and libraries", 
+    parser.add_argument("--local-codeql-library-path", help="Path to local CodeQL queries and libraries",
                        default=LIBRARY_QLPACK_PATH)
-    parser.add_argument("--local-codeql-security-pack-path", help="Path to local CodeQL security queries", 
+    parser.add_argument("--local-codeql-security-pack-path", help="Path to local CodeQL security queries",
                        default=SECURITY_QLPACK_PATH)
-    
-    args = parser.parse_args()
+
+    args = parser.parse_args(argv)
     
     try:
         fetcher = CodeQLDocsFetcher(

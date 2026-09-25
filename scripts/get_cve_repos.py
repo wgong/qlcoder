@@ -273,7 +273,7 @@ def process_cves(cve_ids: List[str], cve_data: Dict[str, Dict],
     return results
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(
         description='Generate diffs between vulnerable and fixed commits for CVEs'
     )
@@ -306,7 +306,7 @@ def main():
         help='Regenerate diffs even if they already exist'
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Load CVE data
     print("Loading project information...")

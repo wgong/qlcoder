@@ -647,15 +647,15 @@ class CWEFetcher:
         logger.info(f"Total documents in ChromaDB: {collection.count()}")
 
 
-def main():
+def main(argv=None):
     """Main function to run the CWE data fetch."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Fetch CWE data and store in ChromaDB")
     parser.add_argument("--workers", type=int, default=4,
                        help="Number of concurrent workers")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         fetcher = CWEFetcher(max_workers=args.workers)

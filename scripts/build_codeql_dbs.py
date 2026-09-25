@@ -314,7 +314,7 @@ def process_cve_directory_parallel(cve_dir_path):
     """Wrapper function for parallel processing"""
     return process_cve_directory(cve_dir_path)
 
-def main():
+def main(argv=None):
     # Setup logging first
     logger = setup_logging()
     logger.info("Starting CodeQL database creation process (build-mode=none)")
@@ -325,7 +325,7 @@ def main():
     parser.add_argument('--cve-id', help='Specific CVE ID to process', default=None)
     parser.add_argument('--parallel', action='store_true', help='Enable parallel processing')
     parser.add_argument('--max-workers', type=int, default=4, help='Maximum number of parallel workers (default: 4)')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Get the CVE base directory
     cve_base_dir = args.cve_dir

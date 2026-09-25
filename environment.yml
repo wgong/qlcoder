@@ -11,7 +11,8 @@ dependencies:
       - asyncio==3.4.3
       - beautifulsoup4==4.13.4
       - chroma-mcp==0.2.5
-      - chromadb==1.0.15 
+      - chromadb==1.0.15
+      - click==8.1.7
       - mcp==1.8.1 
       - openai==1.95.1
       - pandas==2.3.1 
