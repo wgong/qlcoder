@@ -1,0 +1,4 @@
+project_slug,cve_id,github_username,github_repository_name,commit,file,class,class_start,class_end,method,method_start,method_end,signature,Done
+tj__node-growl_CVE-2017-16042_1.9.2,CVE-2017-16042,tj,node-growl,d71177d5331c9de4658aca62e0ac921f178b0669,lib/growl.js,,,,growl,163,289,"function growl(msg, options, fn)",
+parse-community__parse-server_CVE-2022-24760_4.10.6,CVE-2022-24760,parse-community,parse-server,886bfd7cac69496e3f73d4bb536f0eec3cba0e4d,src/RestWrite.js,,,,RestWrite,28,103,"function RestWrite(config, auth, className, query, data, originalData, clientSDK, context, action)",
+parse-community__parse-server_CVE-2022-24760_4.10.6,CVE-2022-24760,parse-community,parse-server,886bfd7cac69496e3f73d4bb536f0eec3cba0e4d,src/Utils.js,Utils,10,36,objectContainsKeyValue,18,35,"static objectContainsKeyValue(obj, key, value)",

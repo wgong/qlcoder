@@ -16,44 +16,82 @@ BUILD_INFO = f"{QL_CODER_ROOT_DIR}/data/build_info.csv"
 NVD_CACHE="nist_cve_cache"
 # chroma db collection for retrieving ASTs of CVE diffs.
 AST_CACHE = "cve_ast_cache"
-# path to CodeQL security qlpack. Depending on your CodeQL version, use the [language]-queries version for the security QLpack path - path/to/codeql/qlpacks/codeql/java-queries/[version number]
 _CODEQL_HOME = os.environ.get("CODEQL_HOME", "/path/to/codeql")
-SECURITY_QLPACK_PATH = os.environ.get(
-    "SECURITY_QLPACK_PATH",
-    f"{_CODEQL_HOME}/qlpacks/codeql/java-queries/1.6.1/Security/CWE",
-)
-# path to CodeQL library qlpack. Depending on your CodeQL version, use the [language]-all version for the language library QLpack path - path/to/codeql/qselpacks/codeql/java-all/[version number]
-LIBRARY_QLPACK_PATH = os.environ.get(
-    "LIBRARY_QLPACK_PATH",
-    f"{_CODEQL_HOME}/qlpacks/codeql/java-all/7.4.0/semmle/code/java",
-)
-CODEQL_LSP_MCP_PATH = os.environ.get("CODEQL_LSP_MCP_PATH", "/path/to/codeql-lsp-mcp")
+
+# Base directory holding your CodeQL bundle's per-language qlpacks, e.g.
+# ~/codeql/qlpacks/codeql — each language ships as
+# <QLPACK_PATH>/<language>-queries/<version>/... and
+# <QLPACK_PATH>/<language>-all/<version>/....
+QLPACK_PATH = os.environ.get("QLPACK_PATH", f"{_CODEQL_HOME}/qlpacks/codeql")
+
+# Explicit overrides, only honored if the user actually set them (for CodeQL
+# installs that don't follow the <language>-queries/<language>-all layout).
+_explicit_security_qlpack_path = os.environ.get("SECURITY_QLPACK_PATH")
+_explicit_library_qlpack_path = os.environ.get("LIBRARY_QLPACK_PATH")
 
 
 def _detect_language() -> str:
     """Infer the target language for this run.
 
-    QLCoder operates on one language per run (one .env, one qlpack). Rather
-    than a separate LANGUAGE setting to keep in sync, infer it from whichever
-    CodeQL qlpack path is configured: CodeQL's own qlpack layout always names
-    the language, e.g. .../qlpacks/codeql/python-queries/<version>/... or
-    .../qlpacks/codeql/python-all/<version>/.... An explicit QLCODER_LANGUAGE
-    env var overrides detection for setups that don't follow that layout.
+    QLCoder operates on one language per run (one .env, one qlpack).
+    QLCODER_LANGUAGE is the primary source of truth; if it's unset, fall back
+    to parsing an explicitly-set SECURITY_QLPACK_PATH/LIBRARY_QLPACK_PATH
+    (CodeQL's own qlpack layout always names the language, e.g.
+    .../qlpacks/codeql/python-queries/<version>/...), for back-compat with
+    setups that configured those directly. Defaults to "java".
     """
     explicit = os.environ.get("QLCODER_LANGUAGE")
     if explicit:
         return explicit.strip().lower()
-    for path in (SECURITY_QLPACK_PATH, LIBRARY_QLPACK_PATH):
+    for path in (_explicit_security_qlpack_path, _explicit_library_qlpack_path):
+        if not path:
+            continue
         match = re.search(r"codeql[/\\]([a-zA-Z]+)-(?:queries|all)", path)
         if match:
             return match.group(1).lower()
     return "java"
 
 
-# Target language for this run, inferred from *_QLPACK_PATH (see
-# _detect_language) unless QLCODER_LANGUAGE is set explicitly. Selects the
-# qlpack template, AST-extraction query variants, and CVE metadata CSVs below.
+# Target language for this run (see _detect_language). Selects the qlpack
+# dependency, AST-extraction query variants, CVE metadata CSVs, and the
+# derived SECURITY_QLPACK_PATH/LIBRARY_QLPACK_PATH below.
 LANGUAGE = _detect_language()
+
+
+def _find_qlpack_subpath(pack_name: str, tail: str):
+    """Auto-detect the installed <version> under QLPACK_PATH/pack_name and
+    return QLPACK_PATH/pack_name/<version>/tail, or None if pack_name isn't
+    installed under QLPACK_PATH (e.g. QLPACK_PATH itself is unset/wrong)."""
+    pack_dir = os.path.join(os.path.expanduser(QLPACK_PATH), pack_name)
+    if not os.path.isdir(pack_dir):
+        return None
+
+    def _version_key(v):
+        return [int(p) if p.isdigit() else p for p in re.split(r"[.\-]", v)]
+
+    versions = sorted(
+        (d for d in os.listdir(pack_dir) if os.path.isdir(os.path.join(pack_dir, d))),
+        key=_version_key,
+    )
+    return os.path.join(pack_dir, versions[-1], tail) if versions else None
+
+
+# path to CodeQL security qlpack: <QLPACK_PATH>/<LANGUAGE>-queries/<version>/Security/CWE,
+# version auto-detected from what's installed under QLPACK_PATH. Set
+# SECURITY_QLPACK_PATH directly to override (non-standard installs).
+SECURITY_QLPACK_PATH = (
+    _explicit_security_qlpack_path
+    or _find_qlpack_subpath(f"{LANGUAGE}-queries", "Security/CWE")
+    or f"{_CODEQL_HOME}/qlpacks/codeql/java-queries/1.6.1/Security/CWE"
+)
+# path to CodeQL library qlpack: <QLPACK_PATH>/<LANGUAGE>-all/<version>/semmle/code/<LANGUAGE>,
+# version auto-detected the same way. Set LIBRARY_QLPACK_PATH directly to override.
+LIBRARY_QLPACK_PATH = (
+    _explicit_library_qlpack_path
+    or _find_qlpack_subpath(f"{LANGUAGE}-all", f"semmle/code/{LANGUAGE}")
+    or f"{_CODEQL_HOME}/qlpacks/codeql/java-all/7.4.0/semmle/code/java"
+)
+CODEQL_LSP_MCP_PATH = os.environ.get("CODEQL_LSP_MCP_PATH", "/path/to/codeql-lsp-mcp")
 
 # CVE metadata CSVs, one pair per language: data/project_info.csv +
 # data/fix_info.csv for java (the original, un-suffixed pair, kept for

@@ -26,7 +26,112 @@ def source_sink_taint_examples() -> str:
     """Return the standard source/sink/sanitizer/taint-step example blocks."""
     if LANGUAGE == "python":
         return _source_sink_taint_examples_python()
+    if LANGUAGE == "javascript":
+        return _source_sink_taint_examples_javascript()
     return _source_sink_taint_examples_java()
+
+
+def _source_sink_taint_examples_javascript() -> str:
+    return """#### Sources (Input/Entry Points):
+Identify points where untrusted data enters the system:
+- User input parameters
+- External data sources
+- Network/file inputs
+- Function parameters accepting external data
+
+#### Source Examples
+package: express
+class: Request
+method: query / body / params (property access)
+signature: req.query[name] / req.body[name] / req.params[name]
+
+package: http
+class: IncomingMessage
+method: (event) 'data'
+signature: request.on('data', callback)
+
+package: process
+class: (module-level)
+method: argv / env (property access)
+signature: process.argv[n] / process.env[name]
+
+package: url
+class: (module-level)
+method: parse
+signature: url.parse(urlString)
+
+package: (builtin)
+class: URLSearchParams
+method: get
+signature: searchParams.get(name)
+
+#### Sinks (Dangerous Operations):
+Identify operations that became dangerous when given malicious input:
+- File operations that could be exploited
+- Database operations
+- System calls
+- Any operation the fix made safer
+
+#### Sink Examples
+package: child_process
+class: (module-level)
+method: exec / execSync
+signature: child_process.exec(command)
+
+package: fs
+class: (module-level)
+method: readFile / writeFile / readFileSync
+signature: fs.readFile(path, callback)
+
+package: (builtin)
+class: (global)
+method: eval
+signature: eval(code)
+
+package: vm
+class: (module-level)
+method: runInContext / runInNewContext
+signature: vm.runInContext(code, context)
+
+package: (builtin)
+class: (global)
+method: require
+signature: require(moduleName)
+
+#### Sanitizers (Security Controls):
+Identify validation/sanitization based on the diff:
+- What validation existed in REMOVED (-) lines? This was INSUFFICIENT
+- What validation was ADDED (+) in the fix? This is the PROPER sanitization
+- Your CodeQL query should only treat the ADDED validation as a sanitizer
+- Do NOT treat removed/insufficient validation as a sanitizer
+
+#### Additional Taint Steps:
+Identify data transformations that preserve taint:
+- Variable assignments
+- Function calls that propagate data
+- Object construction with tainted data
+- String manipulations (template literals, concatenation, .replace())
+
+#### Additional Taint Step Examples
+package: path
+class: (module-level)
+method: join / resolve
+signature: path.join(...paths)
+
+package: (builtin)
+class: JSON
+method: parse / stringify
+signature: JSON.parse(text)
+
+package: (builtin)
+class: String
+method: concat / replace
+signature: str.concat(...strings)
+
+package: (builtin)
+class: Object
+method: assign
+signature: Object.assign(target, ...sources)"""
 
 
 def _source_sink_taint_examples_python() -> str:
@@ -239,7 +344,92 @@ def query_skeleton() -> str:
     """Return the standard CodeQL query template skeleton."""
     if LANGUAGE == "python":
         return _query_skeleton_python()
+    if LANGUAGE == "javascript":
+        return _query_skeleton_javascript()
     return _query_skeleton_java()
+
+
+def _query_skeleton_javascript() -> str:
+    return """```ql
+/**
+ * @name [Vulnerability Name based on analysis]
+ * @description [Description derived from the vulnerability pattern]
+ * @problem.severity error
+ * @security-severity [score based on severity]
+ * @precision high
+ * @tags security
+ * @kind path-problem
+ * @id [unique-id]
+ */
+import javascript
+import semmle.javascript.dataflow.DataFlow
+import semmle.javascript.dataflow.TaintTracking
+import semmle.javascript.security.dataflow.RemoteFlowSources
+
+class Source extends DataFlow::Node {
+  Source() {
+    exists([AST node type from analysis] |
+      /* Fill based on AST patterns for sources identified in Phase 1 & 2 */
+      and this.asExpr() = [appropriate mapping]
+    )
+  }
+}
+
+class Sink extends DataFlow::Node {
+  Sink() {
+    exists([AST node type] |
+      /* Fill based on AST patterns for sinks */
+      and this.asExpr() = [appropriate mapping]
+    ) or
+    exists([Alternative AST pattern] |
+      /* Additional sink patterns from analysis */
+      and [appropriate condition]
+    )
+  }
+}
+
+class Sanitizer extends DataFlow::Node {
+  Sanitizer() {
+    exists([AST node type for sanitizers] |
+      /* Fill based on sanitizer patterns from Phase 1 & 2 */
+    )
+  }
+}
+
+module MyPathConfig implements DataFlow::ConfigSig {
+  predicate isSource(DataFlow::Node source) {
+    source instanceof Source
+  }
+
+  predicate isSink(DataFlow::Node sink) {
+    sink instanceof Sink
+  }
+
+  predicate isBarrier(DataFlow::Node sanitizer) {
+    sanitizer instanceof Sanitizer
+  }
+
+  predicate isAdditionalFlowStep(DataFlow::Node n1, DataFlow::Node n2) {
+    /* Fill based on additional taint steps from analysis */
+  }
+}
+
+module MyPathFlow = TaintTracking::Global<MyPathConfig>;
+import MyPathFlow::PathGraph
+
+from
+  MyPathFlow::PathNode source,
+  MyPathFlow::PathNode sink
+where
+  MyPathFlow::flowPath(source, sink)
+select
+  sink.getNode(),
+  source,
+  sink,
+  "[Alert message based on vulnerability]",
+  source.getNode(),
+  "[source description]"
+```"""
 
 
 def _query_skeleton_python() -> str:

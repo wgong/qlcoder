@@ -39,6 +39,14 @@ _LANGUAGE_GUIDE_URLS = {
         'https://codeql.github.com/docs/codeql-language-guides/analyzing-data-flow-in-python/',
         'https://codeql.github.com/docs/codeql-language-guides/navigating-the-call-graph/',
     ],
+    "javascript": [
+        'https://codeql.github.com/docs/codeql-language-guides/basic-query-for-javascript-code/',
+        'https://codeql.github.com/docs/codeql-language-guides/codeql-library-for-javascript/',
+        'https://codeql.github.com/docs/codeql-language-guides/analyzing-data-flow-in-javascript-and-typescript/',
+        'https://codeql.github.com/docs/codeql-language-guides/abstract-syntax-tree-classes-for-working-with-javascript-and-typescript-programs/',
+        'https://codeql.github.com/docs/codeql-language-guides/using-flow-labels-for-precise-data-flow-analysis/',
+        'https://codeql.github.com/docs/codeql-language-guides/navigating-the-call-graph/',
+    ],
 }
 
 logging.basicConfig(
