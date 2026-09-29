@@ -8,7 +8,19 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import time
 import logging
 sys.path.append(str(Path(__file__).parent.parent))
-from src.config import PROJECT_INFO,LOGS_DIR,CVES_PATH
+from src.config import PROJECT_INFO,LOGS_DIR,CVES_PATH,LANGUAGE
+
+# Project-root marker files per language, checked in order (first match wins).
+_PROJECT_ROOT_MARKERS = {
+    "java": ("pom.xml", "build.gradle", "build.gradle.kts", "build.xml"),
+    "python": ("pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"),
+    "javascript": ("package.json",),
+}
+_SOURCE_FILE_EXTENSIONS = {
+    "java": (".java",),
+    "python": (".py",),
+    "javascript": (".js", ".jsx", ".ts", ".tsx"),
+}
 
 # Setup logging
 def setup_logging():
@@ -28,8 +40,10 @@ def setup_logging():
 
     return logging.getLogger(__name__)
 
-def find_project_source_directory(cve_base_path):
+def find_project_source_directory(cve_base_path, language=LANGUAGE):
     cve_name = os.path.basename(cve_base_path)
+    markers = _PROJECT_ROOT_MARKERS.get(language, _PROJECT_ROOT_MARKERS["java"])
+    extensions = _SOURCE_FILE_EXTENSIONS.get(language, _SOURCE_FILE_EXTENSIONS["java"])
 
     # Look for project directories (not CVE-specific dirs or files)
     for item in os.listdir(cve_base_path):
@@ -39,20 +53,17 @@ def find_project_source_directory(cve_base_path):
         if item.startswith(cve_name) or item.endswith('.diff'):
             continue
 
-        # Look for directories that contain Java source
+        # Look for directories that contain this language's source
         if os.path.isdir(item_path):
-            # Check if this directory contains pom.xml, build.gradle, or build.xml (indicating it's a project root)
-            if (os.path.exists(os.path.join(item_path, "pom.xml")) or
-                os.path.exists(os.path.join(item_path, "build.gradle")) or
-                os.path.exists(os.path.join(item_path, "build.gradle.kts")) or
-                os.path.exists(os.path.join(item_path, "build.xml"))):
+            # Check if this directory contains a build/project-root marker file
+            if any(os.path.exists(os.path.join(item_path, marker)) for marker in markers):
                 return item_path
 
-            # Also check if it has Java source files
+            # Also check if it has source files of this language
             for root, dirs, files in os.walk(item_path):
-                if any(f.endswith('.java') for f in files):
+                if any(f.endswith(extensions) for f in files):
                     return item_path
-                break  
+                break
 
     return None
 
@@ -101,9 +112,9 @@ def create_codeql_database(cve_dir_path, version_type, cve_base_path, commit_has
     """Create CodeQL database using build-mode=none (no build required)"""
     logger = logging.getLogger(__name__)
 
-    db_java_path = os.path.join(cve_dir_path, "db-java")
-    if os.path.exists(db_java_path):
-        print(f"Database already exists at {db_java_path}")
+    db_lang_path = os.path.join(cve_dir_path, f"db-{LANGUAGE}")
+    if os.path.exists(db_lang_path):
+        print(f"Database already exists at {db_lang_path}")
         return True
 
     database_path = os.path.abspath(cve_dir_path)
@@ -122,6 +133,7 @@ def create_codeql_database(cve_dir_path, version_type, cve_base_path, commit_has
         source_candidates = [
             os.path.join(cve_dir_path, "src"),
             os.path.join(cve_dir_path, "src/main/java"),
+            os.path.join(cve_dir_path, "src/main/python"),
             cve_dir_path
         ]
 
@@ -136,7 +148,7 @@ def create_codeql_database(cve_dir_path, version_type, cve_base_path, commit_has
         "codeql", "database", "create",
         database_path,
         "--source-root", source_path,
-        "--language", "java",
+        "--language", LANGUAGE,
         "--build-mode=none",
         "--overwrite"
     ]
@@ -264,8 +276,8 @@ def process_cve_directory(cve_dir_path):
     vul_db_path = os.path.join(cve_dir_path, f"{cve_id}-vul")
     fix_db_path = os.path.join(cve_dir_path, f"{cve_id}-fix")
 
-    vul_db_exists = os.path.exists(os.path.join(vul_db_path, "db-java"))
-    fix_db_exists = os.path.exists(os.path.join(fix_db_path, "db-java"))
+    vul_db_exists = os.path.exists(os.path.join(vul_db_path, f"db-{LANGUAGE}"))
+    fix_db_exists = os.path.exists(os.path.join(fix_db_path, f"db-{LANGUAGE}"))
 
     if vul_db_exists and fix_db_exists:
         print(f"{cve_id} already has complete databases, skipping...")

@@ -11,9 +11,9 @@ from collections import defaultdict
 import re
 import csv
 try:
-    from .config import AST_CACHE, QL_CODER_ROOT_DIR, get_chroma_client
+    from .config import AST_CACHE, QL_CODER_ROOT_DIR, LANGUAGE, get_chroma_client
 except ImportError:
-    from config import AST_CACHE, QL_CODER_ROOT_DIR, get_chroma_client 
+    from config import AST_CACHE, QL_CODER_ROOT_DIR, LANGUAGE, get_chroma_client
 
 def parse_diff_for_line_changes(diff_content: str) -> Dict[str, Set[int]]:
     """Parse diff to extract changed line numbers per file
@@ -435,12 +435,12 @@ Note: This is a cached result. Run with --no-cache-phase-output to regenerate.
             simple_query = f"""/**
  * @name Expressions and statements for {task.cve_id} changed code areas
  * @description Extract expressions and statements from vulnerability fix areas
- * @id java/expr-stmt-diff-{task.cve_id.replace('-', '_')}
+ * @id {LANGUAGE}/expr-stmt-diff-{task.cve_id.replace('-', '_')}
  * @kind problem
  * @problem.severity recommendation
  */
 
-import java
+import {LANGUAGE}
 
 from Element e, Location l
 where 

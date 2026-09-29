@@ -7,6 +7,7 @@ import os
 from .prompt_helpers import query_skeleton as _query_skeleton
 from .prompt_helpers import source_sink_taint_examples as _source_sink_taint_examples
 from .prompt_helpers import phase1_expected_output as _phase1_expected_output
+from .prompt_helpers import STDLIB_COLLECTION, LANGUAGE_LABEL
 
 # Phase 1
 
@@ -364,7 +365,7 @@ DO NOT proceed to Step 2 until ALL six retrievals above are complete.
 
 If you need help with CodeQL syntax or patterns, query these reference collections:
 
-- **Java standard library**: `chroma_query_documents(collection_name="codeql_java_stdlib", query_texts=["ClassName or method"], n_results=2)`
+- **{LANGUAGE_LABEL} standard library**: `chroma_query_documents(collection_name="{STDLIB_COLLECTION}", query_texts=["ClassName or method"], n_results=2)`
 - **CodeQL examples**: `chroma_query_documents(collection_name="codeql_language_guides", query_texts=["pattern description"], n_results=3)`
 - **Similar queries**: `chroma_query_documents(collection_name="codeql_local_queries", query_texts=["vulnerability type"], n_results=3)`
 - **QL language reference**: `chroma_query_documents(collection_name="codeql_ql_reference", query_texts=["syntax feature"], n_results=2)`
@@ -414,7 +415,7 @@ DON'T IMPORT QUERIES YOU MUST WRITE THEM.
 
 **REQUIRED: Look up CodeQL patterns BEFORE writing**:
  - MUST query codeql_language_guides for "DataFlow ConfigSig" to get correct API structure
- - MUST query codeql_java_stdlib for "MethodCall" to confirm correct type names
+ - MUST query {STDLIB_COLLECTION} for "MethodCall" to confirm correct type names
 
 **CodeQL MCP file_uri: "{ql_file_uri}"**
 {part1_context}
@@ -426,7 +427,7 @@ DON'T IMPORT QUERIES YOU MUST WRITE THEM.
    - Use `codeql_hover` to understand types and symbols
    - Use `codeql_definition` on CodeQL library classes/methods for documentation
    - Look up CodeQL patterns for help:
-     * CodeQL Java syntax: `chroma_query_documents(collection_name="codeql_java_stdlib", query_texts=["[ClassName methodName]"], n_results=2)`
+     * CodeQL {LANGUAGE_LABEL} syntax: `chroma_query_documents(collection_name="{STDLIB_COLLECTION}", query_texts=["[ClassName methodName]"], n_results=2)`
      * CodeQL examples: `chroma_query_documents(collection_name="codeql_language_guides", query_texts=["[specific pattern]"], n_results=3)`
    - Fix the errors by updating the file with the Write tool
    - Re-check with `codeql_diagnostics` until no errors remain
@@ -509,7 +510,7 @@ DON'T ADD SEMICOLON AFTER IMPORTS IN QUERY FILE.
 DON'T REMOVE IMPORTS.
 **REQUIRED: Look up CodeQL patterns BEFORE writing**:
      - MUST query codeql_language_guides for "DataFlow ConfigSig" to get correct API structure
-     - MUST query codeql_java_stdlib for "MethodCall" to confirm correct type names
+     - MUST query {STDLIB_COLLECTION} for "MethodCall" to confirm correct type names
      - Use results from these queries to structure your code
 ## Previous Iteration Feedback
 {previous_feedback or "No previous feedback available"}
@@ -528,7 +529,7 @@ DON'T REMOVE IMPORTS.
    - Fixed AST: `chroma_get_documents(collection_name="{task.ast_cache}", where={{"$and": [{{"cve_id": "{task.cve_id}"}}, {{"db_type": "fixed"}}]}})`
 
 3. **Look up CodeQL patterns** as you write:
-   - CodeQL Java syntax: `chroma_query_documents(collection_name="codeql_java_stdlib", query_texts=["[ClassName methodName]"], n_results=2)`
+   - CodeQL {LANGUAGE_LABEL} syntax: `chroma_query_documents(collection_name="{STDLIB_COLLECTION}", query_texts=["[ClassName methodName]"], n_results=2)`
    - CodeQL examples: `chroma_query_documents(collection_name="codeql_language_guides", query_texts=["[specific pattern]"], n_results=3)`
    - Similar queries: `chroma_query_documents(collection_name="codeql_local_queries", query_texts=["[vulnerability category]"], n_results=3)`
    - QL syntax: `chroma_query_documents(collection_name="codeql_ql_reference", query_texts=["[syntax concept]"], n_results=2)`

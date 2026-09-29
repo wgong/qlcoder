@@ -6,6 +6,7 @@ import os
 from .prompt_helpers import query_skeleton as _query_skeleton
 from .prompt_helpers import source_sink_taint_examples as _source_sink_taint_examples
 from .prompt_helpers import phase1_expected_output as _phase1_expected_output
+from .prompt_helpers import STDLIB_COLLECTION, LANGUAGE_LABEL
 
 # Phase 1
 
@@ -274,9 +275,9 @@ Please provide the analysis in this structured format:
 [Summary of information from NIST CVE database]
 
 ## Relevant Files
-[List ONLY the Java files that are directly related to the vulnerability including test files.]
-- [filename.java] - [Brief description of why this file is relevant]
-- [filename2.java] - [Brief description of why this file is relevant]
+[List ONLY the {LANGUAGE_LABEL} files that are directly related to the vulnerability including test files.]
+- [filename] - [Brief description of why this file is relevant]
+- [filename2] - [Brief description of why this file is relevant]
 
 ## Sources
 1. [Description]
@@ -447,7 +448,7 @@ Using the Chroma MCP server for documentation and CodeQL query examples, and Cod
 4. Use this comparison to inform your source, sink, and sanitizer definitions
 
 ## Step 2: Query Template Generation 
-Create a CodeQL query based on the AST comparison analysis. Look up similar existing queries from the allowed reference collections (cwe_data, codeql_language_guides, codeql_local_queries, codeql_ql_reference, codeql_java_stdlib) - DO NOT search cve_analysis_* collections:
+Create a CodeQL query based on the AST comparison analysis. Look up similar existing queries from the allowed reference collections (cwe_data, codeql_language_guides, codeql_local_queries, codeql_ql_reference, {STDLIB_COLLECTION}) - DO NOT search cve_analysis_* collections:
 
 {_query_skeleton()}
 
@@ -471,7 +472,7 @@ Create a CodeQL query based on the AST comparison analysis. Look up similar exis
    - **MANDATORY**: `codeql_complete` when writing complex expressions
    - **MANDATORY**: `codeql_format` to ensure proper code formatting
 3. **For implementation guidance**: Look up patterns as you write:
-   - **CodeQL Java syntax**: `chroma_query_documents(collection_name="codeql_java_stdlib", query_texts=["[ClassName methodName]"], n_results=2)`
+   - **CodeQL {LANGUAGE_LABEL} syntax**: `chroma_query_documents(collection_name="{STDLIB_COLLECTION}", query_texts=["[ClassName methodName]"], n_results=2)`
    - **CodeQL examples**: `chroma_query_documents(collection_name="codeql_language_guides", query_texts=["[specific pattern]"], n_results=3)`
    - **Similar queries**: `chroma_query_documents(collection_name="codeql_local_queries", query_texts=["[vulnerability category]"], n_results=3)`
    - **QL syntax**: `chroma_query_documents(collection_name="codeql_ql_reference", query_texts=["[syntax concept]"], n_results=2)`
@@ -622,7 +623,7 @@ Refine the CodeQL query based on previous iteration feedback to improve vulnerab
    - **`definition` doesn't work on**: imports, user variables, keywords
    - **Don't let tool usage block query completion**
    - **For implementation guidance**: Actively look up patterns as you write:
-     - CodeQL Java syntax: `chroma_query_documents(collection_name="codeql_java_stdlib", query_texts=["[ClassName methodName]"], n_results=2)`
+     - CodeQL {LANGUAGE_LABEL} syntax: `chroma_query_documents(collection_name="{STDLIB_COLLECTION}", query_texts=["[ClassName methodName]"], n_results=2)`
      - CodeQL examples: `chroma_query_documents(collection_name="codeql_language_guides", query_texts=["[specific pattern]"], n_results=3)`
      - Similar queries: `chroma_query_documents(collection_name="codeql_local_queries", query_texts=["[vulnerability category]"], n_results=3)`
      - QL syntax: `chroma_query_documents(collection_name="codeql_ql_reference", query_texts=["[syntax concept]"], n_results=2)`

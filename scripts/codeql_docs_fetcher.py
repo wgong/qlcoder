@@ -19,7 +19,27 @@ import concurrent.futures
 import threading
 from queue import Queue
 import os
-from src.config import CHROMA_DB_PATH, LIBRARY_QLPACK_PATH, SECURITY_QLPACK_PATH, get_chroma_client
+from src.config import CHROMA_DB_PATH, LANGUAGE, LIBRARY_QLPACK_PATH, SECURITY_QLPACK_PATH, get_chroma_client
+
+# Per-language CodeQL docs site URLs (verified to resolve; add more here if
+# extending to another language). "navigating-the-call-graph" isn't
+# language-specific on the docs site, so it's shared across languages.
+_LANGUAGE_GUIDE_URLS = {
+    "java": [
+        'https://codeql.github.com/docs/codeql-language-guides/abstract-syntax-tree-classes-for-working-with-java-programs/',
+        'https://codeql.github.com/docs/codeql-language-guides/basic-query-for-java-code/',
+        'https://codeql.github.com/docs/codeql-language-guides/codeql-library-for-java/',
+        'https://codeql.github.com/docs/codeql-language-guides/analyzing-data-flow-in-java/',
+        'https://codeql.github.com/docs/codeql-language-guides/navigating-the-call-graph/',
+        'https://codeql.github.com/docs/codeql-language-guides/annotations-in-java/',
+    ],
+    "python": [
+        'https://codeql.github.com/docs/codeql-language-guides/basic-query-for-python-code/',
+        'https://codeql.github.com/docs/codeql-language-guides/codeql-library-for-python/',
+        'https://codeql.github.com/docs/codeql-language-guides/analyzing-data-flow-in-python/',
+        'https://codeql.github.com/docs/codeql-language-guides/navigating-the-call-graph/',
+    ],
+}
 
 logging.basicConfig(
     level=logging.INFO,
@@ -69,23 +89,16 @@ class CodeQLDocsFetcher:
         
         # Documentation sources
         self.doc_sources = {
-            'java_stdlib': {
-                'base_url': 'https://codeql.github.com/codeql-standard-libraries/java/index.html',
-                'collection': 'codeql_java_stdlib'
+            f'{LANGUAGE}_stdlib': {
+                'base_url': f'https://codeql.github.com/codeql-standard-libraries/{LANGUAGE}/index.html',
+                'collection': f'codeql_{LANGUAGE}_stdlib'
             },
             'ql_reference': {
                 'base_url': 'https://codeql.github.com/docs/ql-language-reference/',
                 'collection': 'codeql_ql_reference'
             },
             'language_guides': {
-                'urls': [
-                    'https://codeql.github.com/docs/codeql-language-guides/abstract-syntax-tree-classes-for-working-with-java-programs/',
-                    'https://codeql.github.com/docs/codeql-language-guides/basic-query-for-java-code/',
-                    'https://codeql.github.com/docs/codeql-language-guides/codeql-library-for-java/',
-                    'https://codeql.github.com/docs/codeql-language-guides/analyzing-data-flow-in-java/',
-                    'https://codeql.github.com/docs/codeql-language-guides/navigating-the-call-graph/',
-                    'https://codeql.github.com/docs/codeql-language-guides/annotations-in-java/'
-                ],
+                'urls': _LANGUAGE_GUIDE_URLS.get(LANGUAGE, _LANGUAGE_GUIDE_URLS["java"]),
                 'collection': 'codeql_language_guides'
             },
             'local_codeql_queries': {
@@ -109,10 +122,10 @@ class CodeQLDocsFetcher:
         collections = {}
         
         collection_configs = [
-            ('codeql_java_stdlib', 'CodeQL Java Standard Library Documentation'),
+            (f'codeql_{LANGUAGE}_stdlib', f'CodeQL {LANGUAGE.capitalize()} Standard Library Documentation'),
             ('codeql_ql_reference', 'CodeQL QL Language Reference'),
             ('codeql_language_guides', 'CodeQL Language Guides'),
-            ('codeql_local_queries', 'Local CodeQL Java Queries and Libraries'),
+            ('codeql_local_queries', f'Local CodeQL {LANGUAGE.capitalize()} Queries and Libraries'),
         ]
         
         for name, description in collection_configs:
@@ -229,14 +242,14 @@ class CodeQLDocsFetcher:
         }
         
         # Determine document type from URL
-        if '/codeql-standard-libraries/java/' in url:
-            metadata['doc_type'] = 'java_stdlib'
-            metadata['language'] = 'java'
+        if f'/codeql-standard-libraries/{LANGUAGE}/' in url:
+            metadata['doc_type'] = f'{LANGUAGE}_stdlib'
+            metadata['language'] = LANGUAGE
         elif '/ql-language-reference/' in url:
             metadata['doc_type'] = 'ql_reference'
         elif '/codeql-language-guides/' in url:
             metadata['doc_type'] = 'language_guide'
-            metadata['language'] = 'java'
+            metadata['language'] = LANGUAGE
         
         return metadata
     
@@ -253,6 +266,8 @@ class CodeQLDocsFetcher:
             language = "codeql"
             if any(keyword in code_text for keyword in ['public class', 'private', 'void', 'String']):
                 language = "java"
+            elif any(keyword in code_text for keyword in ['def ', 'import ', 'self.', 'elif ']):
+                language = "python"
             
             examples.append({
                 'code': code_text,
@@ -472,12 +487,12 @@ class CodeQLDocsFetcher:
         # 1. Collect all URLs first
         all_url_batches = []
         
-        # Java Standard Library
-        logger.info("Collecting Java Standard Library URLs...")
+        # Language Standard Library
+        logger.info(f"Collecting {LANGUAGE.capitalize()} Standard Library URLs...")
         stdlib_links = self.get_all_links(
-            self.doc_sources['java_stdlib']['base_url']
+            self.doc_sources[f'{LANGUAGE}_stdlib']['base_url']
         )
-        all_url_batches.append((stdlib_links, 'codeql_java_stdlib'))
+        all_url_batches.append((stdlib_links, f'codeql_{LANGUAGE}_stdlib'))
         
         # QL Language Reference
         logger.info("Collecting QL Language Reference URLs...")

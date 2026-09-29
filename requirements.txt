@@ -1,0 +1,11 @@
+asyncio==3.4.3
+beautifulsoup4==4.13.4
+chroma-mcp==0.2.5
+chromadb==1.0.15
+click==8.1.7
+mcp==1.8.1
+openai==1.95.1
+pandas==2.3.1
+python-dateutil==2.9.0.post0
+python-dotenv==1.1.0
+requests==2.32.3

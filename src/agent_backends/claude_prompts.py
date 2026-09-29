@@ -3,6 +3,8 @@
 from .prompt_helpers import query_skeleton as _query_skeleton
 from .prompt_helpers import source_sink_taint_examples as _source_sink_taint_examples
 from .prompt_helpers import phase1_expected_output as _phase1_expected_output
+from .prompt_helpers import STDLIB_COLLECTION, DATAFLOW_IMPORT, LANGUAGE_LABEL
+from .prompt_helpers import LANGUAGE
 
 # Shared helpers
 
@@ -394,7 +396,7 @@ Using the Chroma MCP server for documentation and CodeQL query examples, and Cod
 4. Use this comparison to inform your source, sink, and sanitizer definitions
 
 ### Step 1: Template Generation
-Create a CodeQL query based on the AST comparison analysis. Look up similar existing queries from the allowed reference collections (cwe_data, codeql_language_guides, codeql_local_queries, codeql_ql_reference, codeql_java_stdlib) - DO NOT search cve_analysis_* collections:
+Create a CodeQL query based on the AST comparison analysis. Look up similar existing queries from the allowed reference collections (cwe_data, codeql_language_guides, codeql_local_queries, codeql_ql_reference, {STDLIB_COLLECTION}) - DO NOT search cve_analysis_* collections:
 You MUST use the Write tool to save the query file.
 {_query_skeleton()}
 
@@ -408,8 +410,8 @@ Stick to @kind path-problem query structure.
 1. **Setup**: Use `mcp__codeql__codeql_update_file` to open it with the CodeQL LSP
 2. **Write the full query skeleton** based on the AST analysis:
    ```ql
-   import java
-   import semmle.code.java.dataflow.DataFlow
+   import {LANGUAGE}
+   {DATAFLOW_IMPORT}
    // ... other imports as needed
 
    class Source extends DataFlow::Node {{ ... }}
@@ -454,7 +456,7 @@ Stick to @kind path-problem query structure.
    - **MANDATORY**: `mcp__codeql__codeql_complete` when writing complex expressions
    - **MANDATORY**: `mcp__codeql__codeql_format` to ensure proper code formatting
 3. **For implementation guidance**: Look up patterns as you write:
-   - **CodeQL Java syntax**: `mcp__chroma__chroma_query_documents(collection_name="codeql_java_stdlib", query_texts=["[ClassName methodName]"], n_results=2)`
+   - **CodeQL {LANGUAGE_LABEL} syntax**: `mcp__chroma__chroma_query_documents(collection_name="{STDLIB_COLLECTION}", query_texts=["[ClassName methodName]"], n_results=2)`
    - **CodeQL examples**: `mcp__chroma__chroma_query_documents(collection_name="codeql_language_guides", query_texts=["[specific pattern]"], n_results=3)`
    - **Similar queries**: `mcp__chroma__chroma_query_documents(collection_name="codeql_local_queries", query_texts=["[vulnerability category]"], n_results=3)`
    - **QL syntax**: `mcp__chroma__chroma_query_documents(collection_name="codeql_ql_reference", query_texts=["[syntax concept]"], n_results=2)`
@@ -536,8 +538,8 @@ Create a CodeQL query based on the former vulnerability analysis. You MUST use t
 Stick to @kind path-problem query structure.
 1. **Write the full query skeleton** based on the analysis:
    ```ql
-   import java
-   import semmle.code.java.dataflow.DataFlow
+   import {LANGUAGE}
+   {DATAFLOW_IMPORT}
    // ... other imports as needed
 
    class Source extends DataFlow::Node {{ ... }}
@@ -618,7 +620,7 @@ Using the Chroma MCP server for documentation and CodeQL query examples:
 4. Use this comparison to inform your source, sink, and sanitizer definitions
 
 ### Step 1: Template Generation
-Create a CodeQL query based on the AST comparison analysis. Look up similar existing queries from the allowed reference collections (cwe_data, codeql_language_guides, codeql_local_queries, codeql_ql_reference, codeql_java_stdlib) - DO NOT search cve_analysis_* collections:
+Create a CodeQL query based on the AST comparison analysis. Look up similar existing queries from the allowed reference collections (cwe_data, codeql_language_guides, codeql_local_queries, codeql_ql_reference, {STDLIB_COLLECTION}) - DO NOT search cve_analysis_* collections:
 You MUST use the Write tool to save the query file.
 {_query_skeleton()}
 
@@ -631,8 +633,8 @@ You MUST use the Write tool to save the query file.
 Stick to @kind path-problem query structure.
 1. **Write the full query skeleton** based on the AST analysis:
    ```ql
-   import java
-   import semmle.code.java.dataflow.DataFlow
+   import {LANGUAGE}
+   {DATAFLOW_IMPORT}
    // ... other imports as needed
 
    class Source extends DataFlow::Node {{ ... }}
@@ -655,7 +657,7 @@ Stick to @kind path-problem query structure.
 **YOU MUST WRITE THE QUERY YOURSELF. DON'T IMPORT DEFINED QUERIES. `import *Query` is NOT ALLOWED.**
 **You can import predicates already defined by CodeQL to be used in the query.**
 **For implementation guidance**: Look up patterns as you write:
-- **CodeQL Java syntax**: `mcp__chroma__chroma_query_documents(collection_name="codeql_java_stdlib", query_texts=["[ClassName methodName]"], n_results=2)`
+- **CodeQL {LANGUAGE_LABEL} syntax**: `mcp__chroma__chroma_query_documents(collection_name="{STDLIB_COLLECTION}", query_texts=["[ClassName methodName]"], n_results=2)`
 - **CodeQL examples**: `mcp__chroma__chroma_query_documents(collection_name="codeql_language_guides", query_texts=["[specific pattern]"], n_results=3)`
 - **Similar queries**: `mcp__chroma__chroma_query_documents(collection_name="codeql_local_queries", query_texts=["[vulnerability category]"], n_results=3)`
 - **QL syntax**: `mcp__chroma__chroma_query_documents(collection_name="codeql_ql_reference", query_texts=["[syntax concept]"], n_results=2)`
@@ -726,7 +728,7 @@ Using the Chroma MCP server for AST data and CodeQL MCP server for CodeQL develo
 4. Use this comparison to inform your source, sink, and sanitizer definitions
 
 ### Step 1: Template Generation
-Create a CodeQL query based on the AST comparison analysis. Look up similar existing queries from the allowed reference collections (cwe_data, codeql_language_guides, codeql_local_queries, codeql_ql_reference, codeql_java_stdlib) - DO NOT search cve_analysis_* collections:
+Create a CodeQL query based on the AST comparison analysis. Look up similar existing queries from the allowed reference collections (cwe_data, codeql_language_guides, codeql_local_queries, codeql_ql_reference, {STDLIB_COLLECTION}) - DO NOT search cve_analysis_* collections:
 You MUST use the Write tool to save the query file.
 {_query_skeleton()}
 
@@ -740,8 +742,8 @@ Stick to @kind path-problem query structure.
 1. **Setup**: Use `mcp__codeql__codeql_update_file` to open it with the CodeQL LSP
 2. **Write the full query skeleton** based on the AST analysis:
    ```ql
-   import java
-   import semmle.code.java.dataflow.DataFlow
+   import {LANGUAGE}
+   {DATAFLOW_IMPORT}
    // ... other imports as needed
 
    class Source extends DataFlow::Node {{ ... }}
@@ -846,7 +848,7 @@ Generate a complete CodeQL query based on the analysis and AST patterns, then it
 Using the Chroma MCP server for documentation and CodeQL query examples, and CodeQL MCP server for CodeQL development:
 
 ### Step 1: Template Generation
-Create a CodeQL query based on the vulnerability analysis. Look up similar existing queries from the allowed reference collections (cwe_data, codeql_language_guides, codeql_local_queries, codeql_ql_reference, codeql_java_stdlib) - DO NOT search cve_analysis_* collections:
+Create a CodeQL query based on the vulnerability analysis. Look up similar existing queries from the allowed reference collections (cwe_data, codeql_language_guides, codeql_local_queries, codeql_ql_reference, {STDLIB_COLLECTION}) - DO NOT search cve_analysis_* collections:
 You MUST use the Write tool to save the query file.
 {_query_skeleton()}
 
@@ -860,8 +862,8 @@ Stick to @kind path-problem query structure.
 1. **Setup**: Use `mcp__codeql__codeql_update_file` to open it with the CodeQL LSP
 2. **Write the full query skeleton** based on the AST analysis:
    ```ql
-   import java
-   import semmle.code.java.dataflow.DataFlow
+   import {LANGUAGE}
+   {DATAFLOW_IMPORT}
    // ... other imports as needed
 
    class Source extends DataFlow::Node {{ ... }}
@@ -906,7 +908,7 @@ Stick to @kind path-problem query structure.
    - **MANDATORY**: `mcp__codeql__codeql_complete` when writing complex expressions
    - **MANDATORY**: `mcp__codeql__codeql_format` to ensure proper code formatting
 3. **For implementation guidance**: Look up patterns as you write:
-   - **CodeQL Java syntax**: `mcp__chroma__chroma_query_documents(collection_name="codeql_java_stdlib", query_texts=["[ClassName methodName]"], n_results=2)`
+   - **CodeQL {LANGUAGE_LABEL} syntax**: `mcp__chroma__chroma_query_documents(collection_name="{STDLIB_COLLECTION}", query_texts=["[ClassName methodName]"], n_results=2)`
    - **CodeQL examples**: `mcp__chroma__chroma_query_documents(collection_name="codeql_language_guides", query_texts=["[specific pattern]"], n_results=3)`
    - **Similar queries**: `mcp__chroma__chroma_query_documents(collection_name="codeql_local_queries", query_texts=["[vulnerability category]"], n_results=3)`
    - **QL syntax**: `mcp__chroma__chroma_query_documents(collection_name="codeql_ql_reference", query_texts=["[syntax concept]"], n_results=2)`
@@ -986,7 +988,7 @@ Refine the CodeQL query based on previous iteration feedback to improve vulnerab
    - **ALWAYS use Write tool to save the .ql file** - LSP tools only validate, they don't save files
    - **Complete the query first, validate second**
    - **For implementation guidance**: Actively look up patterns as you write:
-     - CodeQL Java syntax: `mcp__chroma__chroma_query_documents(collection_name="codeql_java_stdlib", query_texts=["[ClassName methodName]"], n_results=2)`
+     - CodeQL {LANGUAGE_LABEL} syntax: `mcp__chroma__chroma_query_documents(collection_name="{STDLIB_COLLECTION}", query_texts=["[ClassName methodName]"], n_results=2)`
      - CodeQL examples: `mcp__chroma__chroma_query_documents(collection_name="codeql_language_guides", query_texts=["[specific pattern]"], n_results=3)`
      - Similar queries: `mcp__chroma__chroma_query_documents(collection_name="codeql_local_queries", query_texts=["[vulnerability category]"], n_results=3)`
      - QL syntax: `mcp__chroma__chroma_query_documents(collection_name="codeql_ql_reference", query_texts=["[syntax concept]"], n_results=2)`
@@ -1073,7 +1075,7 @@ Refine the CodeQL query based on previous iteration feedback to improve vulnerab
      - **Write complete logic** - don't get stuck validating every line
    - **STEP 3**: **USE CHROMA FOR HELP**:
      - **For examples**: `mcp__chroma__chroma_query_documents` on allowed collections
-     - CodeQL Java syntax: `mcp__chroma__chroma_query_documents(collection_name="codeql_java_stdlib", query_texts=["[ClassName methodName]"], n_results=2)`
+     - CodeQL {LANGUAGE_LABEL} syntax: `mcp__chroma__chroma_query_documents(collection_name="{STDLIB_COLLECTION}", query_texts=["[ClassName methodName]"], n_results=2)`
      - CodeQL examples: `mcp__chroma__chroma_query_documents(collection_name="codeql_language_guides", query_texts=["[specific pattern]"], n_results=3)`
      - Similar queries: `mcp__chroma__chroma_query_documents(collection_name="codeql_local_queries", query_texts=["[vulnerability category]"], n_results=3)`
      - QL syntax: `mcp__chroma__chroma_query_documents(collection_name="codeql_ql_reference", query_texts=["[syntax concept]"], n_results=2)`
@@ -1229,7 +1231,7 @@ Refine the CodeQL query based on previous iteration feedback to improve vulnerab
    - **`definition` doesn't work on**: imports, user variables, keywords
    - **Don't let tool usage block query completion**
    - **For implementation guidance**: Actively look up patterns as you write:
-     - CodeQL Java syntax: `mcp__chroma__chroma_query_documents(collection_name="codeql_java_stdlib", query_texts=["[ClassName methodName]"], n_results=2)`
+     - CodeQL {LANGUAGE_LABEL} syntax: `mcp__chroma__chroma_query_documents(collection_name="{STDLIB_COLLECTION}", query_texts=["[ClassName methodName]"], n_results=2)`
      - CodeQL examples: `mcp__chroma__chroma_query_documents(collection_name="codeql_language_guides", query_texts=["[specific pattern]"], n_results=3)`
      - Similar queries: `mcp__chroma__chroma_query_documents(collection_name="codeql_local_queries", query_texts=["[vulnerability category]"], n_results=3)`
      - QL syntax: `mcp__chroma__chroma_query_documents(collection_name="codeql_ql_reference", query_texts=["[syntax concept]"], n_results=2)`

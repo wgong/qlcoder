@@ -29,7 +29,7 @@ except ImportError:
     from ast_extraction import run_phase2
     from agent_backends import create_backend
     from config import AST_CACHE, NVD_CACHE, CHROMA_DB_PATH, CODEQL_LSP_MCP_PATH, QL_CODER_ROOT_DIR, CVES_PATH, CVE_DESCRIPTIONS_FILE
-    from query_subagents_evaluation import run_query_with_evaluation_results, compile_query_once
+    from query_subagents_evaluation import run_query_with_evaluation_results, compile_query_once, cleanup_databases_after_run
 
 class QLAgentIterative:
 
@@ -273,6 +273,7 @@ class QLAgentIterative:
             # Check if we have a successful query
             if self._is_iteration_successful(iteration_result):
                 self.logger.info(f"Successful query found in iteration {iteration}")
+                await cleanup_databases_after_run(task.vuln_db_path, task.fixed_db_path, self.logger)
                 return {
                     "success": True,
                     "final_query": iteration_result.query_path,
@@ -295,6 +296,7 @@ class QLAgentIterative:
         
         # Max iterations reached
         self.logger.warning(f"Max iterations ({task.max_iteration}) reached without success")
+        await cleanup_databases_after_run(task.vuln_db_path, task.fixed_db_path, self.logger)
         return {
             "success": False,
             "error": f"Max iterations ({task.max_iteration}) reached",

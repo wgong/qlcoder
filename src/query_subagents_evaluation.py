@@ -13,8 +13,17 @@ import tempfile
 import pandas as pd
 try:
     from .config import CODEQL_PATH
+    from .evaluation import LANGUAGE_EXTENSIONS
 except ImportError:
     from config import CODEQL_PATH
+    from evaluation import LANGUAGE_EXTENSIONS
+
+# Per-subprocess timeouts (seconds). `database analyze` re-evaluates the whole
+# DB so it gets a much longer ceiling than the other, normally-fast steps.
+QUERY_RUN_TIMEOUT = 600
+BQRS_DECODE_TIMEOUT = 120
+SARIF_ANALYZE_TIMEOUT = 1800
+CACHE_CLEANUP_TIMEOUT = 120
 
 @dataclass
 class QueryResult:
@@ -90,14 +99,11 @@ class QueryExecutionSubagent:
             
             # Step 3: Generate SARIF for detailed evaluation
             await self._generate_sarif(query_path, database_path, sarif_path)
-            
+
             # Step 4: Count results
             num_results = self._count_csv_results(csv_path)
-            
-            # Step 5: Clean database cache to prevent lock issues
-            await self._cleanup_database_cache(database_path)
-            
-            self.logger.info(f"{database_type} DB: {num_results} results (cache cleaned)")
+
+            self.logger.info(f"{database_type} DB: {num_results} results")
             
             return QueryResult(
                 query_path=query_path,
@@ -124,6 +130,21 @@ class QueryExecutionSubagent:
                 error=str(e)
             )
     
+    async def _run_subprocess(self, cmd: List[str], timeout: float, step_name: str) -> Tuple[Optional[int], bytes, bytes]:
+        """Run a subprocess with a hard timeout, killing it if it overruns."""
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            raise RuntimeError(f"{step_name} timed out after {timeout}s: {' '.join(cmd)}")
+        return process.returncode, stdout, stderr
+
     async def _run_codeql_query(self, query_path: str, database_path: str, output_path: str):
         """Execute CodeQL query and save results to BQRS"""
         cmd = [
@@ -132,18 +153,12 @@ class QueryExecutionSubagent:
             "--output", output_path,
             "--", query_path
         ]
-        
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        
-        stdout, stderr = await process.communicate()
-        
-        if process.returncode != 0:
+
+        returncode, stdout, stderr = await self._run_subprocess(cmd, QUERY_RUN_TIMEOUT, "codeql query run")
+
+        if returncode != 0:
             raise RuntimeError(f"CodeQL query failed: {stderr.decode()}")
-    
+
     async def _decode_bqrs_to_csv(self, bqrs_path: str, csv_path: str):
         """Decode BQRS file to CSV format"""
         cmd = [
@@ -152,18 +167,12 @@ class QueryExecutionSubagent:
             f"--output={csv_path}",
             bqrs_path
         ]
-        
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        
-        stdout, stderr = await process.communicate()
-        
-        if process.returncode != 0:
+
+        returncode, stdout, stderr = await self._run_subprocess(cmd, BQRS_DECODE_TIMEOUT, "codeql bqrs decode")
+
+        if returncode != 0:
             raise RuntimeError(f"BQRS decode failed: {stderr.decode()}")
-    
+
     async def _generate_sarif(self, query_path: str, database_path: str, sarif_path: str):
         """Generate SARIF output using database analyze"""
         self.logger.info("Generating SARIF format")
@@ -173,23 +182,22 @@ class QueryExecutionSubagent:
             query_path,
             "--format=sarif-latest",
             "--output", sarif_path,
-            "--rerun"
         ]
-        
+
         self.logger.info(f"Generating SARIF: {' '.join(cmd)}")
-        
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        
-        stdout, stderr = await process.communicate()
+
+        try:
+            returncode, stdout, stderr = await self._run_subprocess(cmd, SARIF_ANALYZE_TIMEOUT, "codeql database analyze")
+        except RuntimeError as e:
+            self.logger.error(str(e))
+            with open(sarif_path, 'w') as f:
+                json.dump({"runs": [{"results": []}]}, f)
+            return
         stdout_str = stdout.decode() if stdout else ""
         stderr_str = stderr.decode() if stderr else ""
-        
-        if process.returncode != 0:
-            self.logger.error(f"SARIF generation failed with return code {process.returncode}")
+
+        if returncode != 0:
+            self.logger.error(f"SARIF generation failed with return code {returncode}")
             self.logger.error(f"STDOUT: {stdout_str}")
             self.logger.error(f"STDERR: {stderr_str}")
             # Create empty SARIF file so evaluation doesn't crash
@@ -218,28 +226,27 @@ class QueryExecutionSubagent:
             self.logger.error(f"Failed to count CSV results: {e}")
             return 0
     
-    async def _cleanup_database_cache(self, database_path: str):
-        """Clean database cache to prevent locking issues"""
+    async def cleanup_database_cache(self, database_path: str):
+        """Clean database cache to prevent locking issues.
+
+        Call once after all iterations against a DB are done, not per-iteration —
+        clearing it after every run forces `database analyze` to re-evaluate the
+        whole DB from cold cache on every subsequent iteration.
+        """
         try:
             cmd = [
                 self.codeql_path, "database", "cleanup",
                 database_path,
                 "--cache-cleanup=clear"
             ]
-            
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            
-            stdout, stderr = await process.communicate()
-            
-            if process.returncode != 0:
+
+            returncode, stdout, stderr = await self._run_subprocess(cmd, CACHE_CLEANUP_TIMEOUT, "codeql database cleanup")
+
+            if returncode != 0:
                 self.logger.warning(f"Database cleanup warning: {stderr.decode()}")
             else:
                 self.logger.debug(f"Successfully cleaned database cache: {database_path}")
-                
+
         except Exception as e:
             self.logger.warning(f"Failed to cleanup database cache: {e}")
 
@@ -468,10 +475,11 @@ class EvaluationCalculator:
         if message is None:
             message = location_obj.get('location', {}).get('message', {}).get('text', '')
 
-        # Extract class name from file path (if Java)
+        # Extract class name from file path
         class_name = "unknown"
-        if file_uri.endswith('.java'):
-            file_name = file_uri.split('/')[-1].replace('.java', '')
+        if file_uri.endswith(LANGUAGE_EXTENSIONS):
+            ext = next(e for e in LANGUAGE_EXTENSIONS if file_uri.endswith(e))
+            file_name = file_uri.split('/')[-1][:-len(ext)]
             class_name = file_name
 
         # Format: file:line:Class:expression
@@ -493,13 +501,14 @@ class EvaluationCalculator:
             # Try to extract class and method from file path and message
             # Format: "path/to/file.java:Class:method"
 
-            # Extract class name from file path (if Java)
+            # Extract class name from file path
             class_name = ""
             method_name = ""
 
-            if file_uri.endswith('.java'):
+            if file_uri.endswith(LANGUAGE_EXTENSIONS):
                 # Try to get class name from file path
-                file_name = file_uri.split('/')[-1].replace('.java', '')
+                ext = next(e for e in LANGUAGE_EXTENSIONS if file_uri.endswith(e))
+                file_name = file_uri.split('/')[-1][:-len(ext)]
                 class_name = file_name
 
             # Parse message for method information
@@ -753,9 +762,23 @@ async def run_query_with_evaluation_results(
         logger = logging.getLogger(__name__)
     
     executor = ParallelQueryExecutor(cve_id, logger)
-    
+
     return await executor.run_and_get_evaluation_results(
         query_path, vuln_db_path, fixed_db_path, iteration_number, output_dir
+    )
+
+
+async def cleanup_databases_after_run(
+    vuln_db_path: str,
+    fixed_db_path: str,
+    logger: Optional[logging.Logger] = None
+):
+    """Clear CodeQL's evaluator cache for both DBs. Call once after all iterations
+    of a CVE run finish, not per-iteration (see `QueryExecutionSubagent.cleanup_database_cache`)."""
+    subagent = QueryExecutionSubagent(logger)
+    await asyncio.gather(
+        subagent.cleanup_database_cache(vuln_db_path),
+        subagent.cleanup_database_cache(fixed_db_path),
     )
 
 

@@ -13,9 +13,17 @@ from pathlib import Path
 import logging
 import pandas as pd
 try:
-    from .config import FIX_INFO, QUERIES_PATH
+    from .config import FIX_INFO, QUERIES_PATH, LANGUAGE
 except ImportError:
-    from config import FIX_INFO, QUERIES_PATH 
+    from config import FIX_INFO, QUERIES_PATH, LANGUAGE
+
+# Source-file extensions considered for this run's language (used to filter
+# fix_info.csv rows / test-file detection / SARIF location file matching).
+LANGUAGE_EXTENSIONS = {
+    "java": (".java",),
+    "python": (".py",),
+    "javascript": (".js", ".jsx", ".ts", ".tsx"),
+}.get(LANGUAGE, (".java",))
 
 @dataclass(frozen=True)
 class CodeLocation:
@@ -60,10 +68,11 @@ class QueryEvaluator:
             return True
 
         # Check if file follows test naming conventions
-        if (basename.endswith("test.java") or
-            basename.endswith("tests.java") or
+        if (any(basename.endswith(f"test{ext}") for ext in LANGUAGE_EXTENSIONS) or
+            any(basename.endswith(f"tests{ext}") for ext in LANGUAGE_EXTENSIONS) or
             basename.startswith("test") or
-            basename.endswith("testcase.java") or
+            basename.endswith("_test.py") or
+            any(basename.endswith(f"testcase{ext}") for ext in LANGUAGE_EXTENSIONS) or
             "unittest" in basename or
             "integrationtest" in basename):
             return True
@@ -140,16 +149,16 @@ class QueryEvaluator:
         # Filter rows for this specific CVE
         cve_rows = fix_data[fix_data['cve_id'] == self.cve_id]
         
-        # Extract Java files and methods for this CVE (excluding test files)
+        # Extract source files and methods for this CVE (excluding test files)
         for file_name in cve_rows["file"]:
-            if file_name.endswith(".java") and not self._is_test_file(file_name):
+            if file_name.endswith(LANGUAGE_EXTENSIONS) and not self._is_test_file(file_name):
                 fixed_files.add(file_name)
-        
+
         # Create method keys in format "file:class:method" (excluding test files)
         for _, row in cve_rows.iterrows():
             file_name = row["file"]
             if (pd.notna(row["method"]) and pd.notna(row["class"]) and
-                file_name.endswith(".java") and
+                file_name.endswith(LANGUAGE_EXTENSIONS) and
                 not self._is_test_file(file_name)):
                 method_key = f"{file_name}:{row['class']}:{row['method']}"
                 fixed_methods.add(method_key)
@@ -202,7 +211,7 @@ class QueryEvaluator:
                 "codeql", "query", "run",
                 "--database", self.database_path,
                 "--output", class_bqrs_path,
-                f"{QUERIES_PATH}/fetch_class_locs.ql"
+                f"{QUERIES_PATH}/fetch_class_locs_{LANGUAGE}.ql"
             ]
             
             result = subprocess.run(cmd_classes, capture_output=True, text=True, timeout=300)
@@ -224,10 +233,10 @@ class QueryEvaluator:
             
             self.logger.info("Running method locations query...")
             cmd_methods = [
-                "codeql", "query", "run", 
+                "codeql", "query", "run",
                 "--database", self.database_path,
                 "--output", method_bqrs_path,
-                f"{QUERIES_PATH}/fetch_func_locs.ql"
+                f"{QUERIES_PATH}/fetch_func_locs_{LANGUAGE}.ql"
             ]
             
             result = subprocess.run(cmd_methods, capture_output=True, text=True, timeout=300)

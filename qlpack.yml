@@ -1,4 +1,11 @@
-name: ql-coder 
+name: ql-coder
 version: 0.0.0
 dependencies:
+  # One dependency per supported language (see src/config.py's LANGUAGE
+  # detection). Declaring all of them is harmless — CodeQL only resolves the
+  # library a given query actually `import`s, and every officially
+  # distributed CodeQL bundle already ships these locally, so this doesn't
+  # require network/registry access at `codeql pack install` time.
   codeql/java-all: "*"
+  codeql/python-all: "*"
+  codeql/javascript-all: "*"
