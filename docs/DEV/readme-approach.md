@@ -320,22 +320,22 @@ Renamed and restructured all three (schemas/prompts updated in
 Smoke-tested (dry-run) end-to-end against `CVE-2026-27825` again after the
 redesign to confirm the new filenames and list schemas chain correctly.
 
-### 6.2 Orchestrator: `cve_secure.py` (2026-09-29)
+### 6.2 Orchestrator: `cve_coder.py` (2026-09-29)
 
-Added `scripts/cve_secure.py`, a click CLI in front of the three scripts —
+Added `scripts/cve_coder.py`, a click CLI in front of the three scripts —
 same translation-layer pattern `src/cli.py` uses for the CodeQL pipeline's
 scripts (click options mirror each script's argparse options 1:1, build an
 argv list, call that script's own unmodified `main(argv)`; not a
 reimplementation, so `python3 scripts/cve_detect.py ...` and
-`python3 scripts/cve_secure.py detect ...` run identical logic).
+`python3 scripts/cve_coder.py detect ...` run identical logic).
 
 ```sh
-python3 scripts/cve_secure.py --help
-python3 scripts/cve_secure.py detect --cve-id CVE-2026-27825
-python3 scripts/cve_secure.py patch --report output/triage/CVE-2026-27825/cve_findings.yaml
-python3 scripts/cve_secure.py verify --report output/triage/CVE-2026-27825/cve_patch.yaml
-python3 scripts/cve_secure.py pipeline --cve-id CVE-2026-27825          # all three, chained
-python3 scripts/cve_secure.py pipeline --cve-id CVE-2026-27825 --dry-run
+python3 scripts/cve_coder.py --help
+python3 scripts/cve_coder.py detect --cve-id CVE-2026-27825
+python3 scripts/cve_coder.py patch --report output/triage/CVE-2026-27825/cve_findings.yaml
+python3 scripts/cve_coder.py verify --report output/triage/CVE-2026-27825/cve_patch.yaml
+python3 scripts/cve_coder.py pipeline --cve-id CVE-2026-27825          # all three, chained
+python3 scripts/cve_coder.py pipeline --cve-id CVE-2026-27825 --dry-run
 ```
 
 - `detect`/`patch`/`verify` — run one unit standalone, identical options to
@@ -360,6 +360,203 @@ first stage. Not yet run live (needs real agent credentials, same caveat
 as the underlying three scripts).
 
 Still not wired into `bin/qlcoder`/`src/cli.py` (per suggestion 5 in
-section 6 above) — `cve_secure.py` is its own standalone entry point for
+section 6 above) — `cve_coder.py` is its own standalone entry point for
 now, consistent with this whole prototype not yet being merged into the
 main `qlcoder` CLI pending validation against a live run.
+
+### 6.3 Final naming + a new `spec` step (2026-09-29)
+
+Two follow-up requests: (1) settle on one consistent naming scheme across
+all the reports (the mix of `cve_findings.yaml`/`cve_patch.yaml`/
+`cve_verified.yaml` underscores vs. a newly-requested `cve-metadata.yaml`
+hyphenated name was inconsistent), and (2) add a step *before* detect that
+prepares that metadata file, so cve_detect.py stops doing its own NVD
+fetch/repo-resolution work and just consumes a spec.
+
+Settled naming (chosen by the user, encodes pipeline order directly in the
+filename so `ls output/triage/<CVE-ID>/` sorts in run order):
+
+| File | Produced by | Consumes |
+|---|---|---|
+| `cve-1-metadata.yaml` | `cve_spec.py` (new) | `--cve-id` |
+| `cve-2-findings.yaml` | `cve_detect.py` | `cve-1-metadata.yaml` |
+| `cve-3-fixes.yaml` | `cve_patch.py` | `cve-2-findings.yaml` |
+| `cve-4-tests.yaml` | `cve_verify.py` | `cve-3-fixes.yaml` |
+| `cve-5-pipeline.yaml` | `cve_coder.py pipeline` (new) | all four above |
+
+**`cve_spec.py`** is a new fifth script, step 0: pure data-gathering, no
+agent call at all. It fetches NVD metadata (`cves_fetcher.py`'s
+`fetch_cve_from_nvd`/`create_cve_metadata`, same as before), resolves
+repo/commit info from `project_info*.csv` or `--github-url`/`--commit`,
+and checks out the vulnerable commit (`get_cve_repos.process_cve`, same as
+before) — this is exactly the work `cve_detect.py` used to do inline at
+the top of its `main()`, now split out so detect's own job is purely "read
+the code the spec already prepared and judge it."
+
+**`cve_detect.py`** was refactored accordingly: its `--cve-id`/
+`--github-url`/`--commit`/`--repo-path` options and its NVD-fetch/repo-
+checkout logic are gone, replaced by a single required `--spec <path>`
+pointing at `cve-1-metadata.yaml`. Its own report still carries the spec's
+`nvd_metadata`/`github_url`/`vulnerable_commit`/known-fix-hints through
+into `cve-2-findings.yaml` (plus a new `spec_path` field), so each report
+stays self-contained for audit purposes even though the data originated
+one stage earlier.
+
+**`cve_coder.py`** gained a `spec` subcommand, `detect`'s options changed
+to match (`--spec` instead of `--cve-id`/etc.), and `pipeline` now runs all
+four stages in order (`spec -> detect -> patch -> verify`) plus a new final
+step: it reads back all four reports that actually ran and writes
+`cve-5-pipeline.yaml`, a summary tying them together (each stage's report
+path + a few key fields — `overall_vulnerable`/`findings_count` for
+detect, `patch_strategy`/`fixes_count` for patch, `overall_verdict`/
+`tests_count` for verify — plus one rolled-up `overall_status` for the
+whole run, e.g. `EFFECTIVE`, `FIX_FAILED`, `SKIPPED_NOT_VULNERABLE`, or
+`STOPPED_AFTER_<stage>` if `--stop-after` cut the run short). `--stop-after`
+now accepts `spec`/`detect`/`patch`/`verify`.
+
+Re-smoke-tested (dry-run) against `CVE-2026-27825`: full `pipeline` run
+producing all five files in order with a correct `cve-5-pipeline.yaml`
+summary, and `--stop-after spec` correctly producing just
+`cve-1-metadata.yaml` + `cve-5-pipeline.yaml` (summary written even for a
+partial run, so there's always exactly one summary reflecting whatever
+actually ran).
+
+### 6.4 Generic `--in`/`--out`, and `--iter` for refinement attempts (2026-09-29)
+
+Follow-up requirement: every `cve_*.py` script should take generic
+`--in`/`--out` flags rather than stage-specific names (`--report`,
+`--spec`, `--output`), with two exceptions — `cve_spec.py` and
+`cve_coder.py` take `--cve-id` as their input instead, since they're the
+two entry points with no earlier report to chain from. Additionally,
+`cve_detect.py` and `cve_patch.py` (the two stages that might reasonably
+be re-run as refinement attempts — re-triage after new information, or
+re-patch after a failed verify) gained an `--iter <N>` option that
+suffixes their default `--out` path, e.g. `cve-3-fixes-iter-2.yaml`
+instead of overwriting `cve-3-fixes.yaml`.
+
+Changes:
+
+- `triage_common.default_report_path(cve_id, filename, iter_num=None)` now
+  takes an optional `iter_num`, inserting `-iter-<N>` before the extension
+  when given.
+- `cve_spec.py`: `--output` → `--out` (still takes `--cve-id`, unchanged).
+- `cve_detect.py`: `--spec` → `--in` (still required, still a full path —
+  there's no way to default it without already knowing which CVE's spec to
+  read), `--output` → `--out`, added `--iter`. Its report's `spec_path`
+  field renamed to `in_path` for consistency with the other two scripts.
+- `cve_patch.py`: `--report` → `--in`, `--output` → `--out`, added
+  `--iter`. Its isolated patch clone directory is now also iter-aware
+  (`<repo>-patched-iter-<N>` instead of always `<repo>-patched`) so
+  concurrent/successive patch attempts don't clobber each other's working
+  copy. Its report's `findings_report_path` field renamed to `in_path`.
+- `cve_verify.py`: `--report` → `--in`, `--output` → `--out` (no `--iter`
+  — verify isn't one of the two stages called out as loopable; if you're
+  verifying a specific patch iteration, point `--in` at that iteration's
+  `cve-3-fixes-iter-<N>.yaml` explicitly). Its report's `patch_report_path`
+  field renamed to `in_path`.
+- `cve_coder.py`: all four subcommands' options renamed to match
+  (`spec`/`pipeline` keep `--cve-id`; `detect`/`patch`/`verify` take
+  `--in`/`--out`; `detect`/`patch` and `pipeline` itself also take
+  `--iter`, which `pipeline` applies to both its detect and patch stages
+  when given — the two stages it makes sense to re-run together as one
+  refinement attempt).
+
+Note this only adds the *filename* affordance for iteration — there's no
+automatic loop yet (e.g. re-running patch until verify passes). Adding
+that loop, if wanted, is a natural next step once the underlying prompts/
+scripts have been validated against a live agent run.
+
+Re-smoke-tested end to end: all four scripts individually with their new
+`--in`/`--out` flags (`cve_spec.py --cve-id ... ` → `cve_detect.py --in
+...` → `cve_patch.py --in ... --iter 1` → `cve_verify.py --in
+.../cve-3-fixes-iter-1.yaml`), confirming `-iter-1` correctly appears only
+on detect/patch's outputs; and the full `cve_coder.py pipeline --iter 3`
+producing `cve-2-findings-iter-3.yaml`/`cve-3-fixes-iter-3.yaml` while
+`cve-1-metadata.yaml`/`cve-4-tests.yaml` stay unsuffixed, chaining
+correctly end to end.
+
+### 6.5 `--max-iters`: internal retry loops + an automatic patch/verify round loop (2026-09-29)
+
+Follow-up requirement: add `--max-iters` to `cve_detect.py`, `cve_patch.py`,
+and `cve_coder.py` for internal looping. `--iter` (6.4) is an *external*
+label — the caller decides this whole invocation is attempt N and the
+script just suffixes its output accordingly. `--max-iters` is the opposite:
+the script itself decides whether to retry, based on whether its own
+output was actually usable.
+
+- **`cve_detect.py --max-iters N`** (default 1): retries the single agent
+  call up to N times if the reply doesn't parse into the required YAML
+  schema, or leaves `overall_vulnerable` as `unknown`/missing. Each retry's
+  prompt is prefixed with a note naming the specific problem (unparseable
+  reply vs. an indecisive verdict) so the agent knows what to fix, not just
+  "try again". The final report gets a new `attempts` list (one entry per
+  try: parsed OK?, verdict) so it's visible from the report alone whether
+  the first attempt succeeded or it took retries.
+- **`cve_patch.py --max-iters N`** (default 1): retries if the agent's
+  reply doesn't parse, or — the more important real-world case — if it
+  *listed* fixes but `git diff` on the working copy shows no actual file
+  changed (agent claimed to edit something but didn't). Also gained
+  `--feedback <path to a prior cve-4-tests.yaml>`: when given, the prompt
+  is seeded with that report's failing test details (which test, expected
+  vs. actual PASS/FAILED, output tail) so a re-patch attempt has concrete
+  information about what went wrong last time, not just "try harder". Its
+  isolated clone directory naming already accounted for `--iter` (6.4);
+  `--max-iters`'s internal retries reuse the *same* clone directory across
+  attempts within one call (an agent's later attempt can see its own
+  earlier uncommitted edits via `git diff`, which is fine — it's the same
+  logical attempt, just retried). Report gains the same `attempts` list
+  shape as detect's.
+- **`cve_coder.py`**: `detect`/`patch` subcommands gained passthrough
+  `--max-iters` (and `patch` also `--feedback`) matching the underlying
+  scripts exactly. `pipeline` gained its own `--max-iters` with a
+  different, higher-level meaning: it's now a **round loop over
+  patch+verify**. With the default `--max-iters 1` it's exactly the old
+  single-pass pipeline (identical behavior, verified by re-running the
+  pre-existing dry-run smoke test). With `--max-iters N > 1`: after each
+  round's verify, if `overall_verdict` isn't `EFFECTIVE` and rounds remain,
+  the next round re-runs patch with `--feedback` pointed at that round's
+  verify report, then verifies again — up to N rounds, stopping early the
+  first time a round comes back `EFFECTIVE` (or if patch/verify report
+  `skipped`, since retrying won't fix "not vulnerable"). Round outputs are
+  named `cve-3-fixes-iter-<round>.yaml`/`cve-4-tests-iter-<round>.yaml` —
+  reusing the existing `-iter-<N>` suffix convention for the round counter,
+  which is why `--iter` and `--max-iters > 1` are mutually exclusive on
+  `pipeline` (both would be trying to own the same numbering; validated
+  with a `click.UsageError`). `cve-5-pipeline.yaml` gained a `rounds_run`
+  field, and its `patch`/`verify` entries always reflect the *last* round
+  that ran (the round loop overwrites `paths["patch"]`/`paths["verify"]`
+  each round, keeping only the final one in the trace — earlier rounds'
+  reports are still on disk under their `-iter-<N>` names, just not
+  repeated in the summary). `pipeline`'s `--max-iters` is also forwarded to
+  the one-shot `detect` call's own internal retry (its own `--max-iters`),
+  since detect only runs once per pipeline regardless of how many
+  patch/verify rounds follow.
+
+Note the nesting: a pipeline round's patch call itself always uses
+`--max-iters 1` internally (the round loop is the retry mechanism at that
+level) — `cve_patch.py`'s own `--max-iters` is for a human or script
+calling it directly who wants retries *within* one round, not exposed
+separately on `pipeline` to avoid a confusing N×M combinatorial option
+surface for a prototype.
+
+Re-smoke-tested: `cve_detect.py --max-iters 3 --dry-run` and
+`cve_patch.py --max-iters 3 --dry-run` both correctly cap at exactly 1
+attempt in dry-run (retrying against a fixed stub response would be
+pointless); unit-tested `cve_patch._attempt_issue` directly against the
+four cases (empty diff with fixes listed, `unable_to_fix` with no fixes,
+a real diff, and a parse error); and three `cve_coder.py pipeline`
+dry-runs — `--max-iters 1` (byte-for-byte same stage sequence as before),
+`--max-iters 3` (confirmed exactly 3 rounds of
+patch-round-k/verify-round-k, `-iter-1`/`-iter-2`/`-iter-3` on both,
+`rounds_run: 3` in the summary), and `--iter 5 --max-iters 2` together
+(confirmed it's rejected with a clear error instead of silently picking
+one).
+
+### 6.6 Renamed the orchestrator: `cve_secure.py` -> `cve_coder.py` (2026-09-29)
+
+`scripts/cve_secure.py` renamed to `scripts/cve_coder.py` (`git mv`; all
+internal references and this doc's section headers/usage examples updated
+to match). Same file, same commands (`spec`/`detect`/`patch`/`verify`/
+`pipeline`), just a name that reads as "the CVE-coding pipeline" rather
+than implying it's itself a security-sensitive component. Re-verified
+`python3 scripts/cve_coder.py --help` runs correctly post-rename.

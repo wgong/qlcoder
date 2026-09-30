@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""(c) cve_verify.py -- direct agentic triage, step 3: verify.
+"""(3/verify) cve_verify.py -- direct agentic triage, step 3: verify.
 
-Given `cve_patch.yaml` from cve_patch.py, ask a coding agent to write one or
+Given `cve-3-fixes.yaml` from cve_patch.py, ask a coding agent to write one or
 more minimal regression tests (ideally one per fix) that reproduce the
 underlying vulnerability, then run each test against *both* the original
 vulnerable checkout and the patched working copy. A fix is only reported
@@ -10,15 +10,15 @@ checkout (demonstrating the bug) and passes clean on the patched one --
 a test that doesn't fail on either side is reported INCONCLUSIVE, not
 silently treated as a pass.
 
-Output is `cve_verified.yaml`: the whole test suite listed one-by-one with
-PASS/FAILED results per side, plus an overall verdict. Last of three
-reports (cve_findings.yaml -> cve_patch.yaml -> cve_verified.yaml) meant to
-form a complete, auditable trace of the detect/patch/verify work on this
-CVE.
+Output is `cve-4-tests.yaml`: the whole test suite listed one-by-one with
+PASS/FAILED results per side, plus an overall verdict. Fourth of five
+reports (cve-1-metadata.yaml -> cve-2-findings.yaml -> cve-3-fixes.yaml ->
+cve-4-tests.yaml -> cve-5-pipeline.yaml) forming a complete, auditable
+trace of the detect/patch/verify work on this CVE.
 
 Usage:
-    python3 scripts/cve_verify.py --report output/triage/CVE-2026-27825/cve_patch.yaml
-    python3 scripts/cve_verify.py --report .../cve_patch.yaml --dry-run
+    python3 scripts/cve_verify.py --in output/triage/CVE-2026-27825/cve-3-fixes.yaml
+    python3 scripts/cve_verify.py --in .../cve-3-fixes.yaml --dry-run
 """
 import argparse
 import os
@@ -131,22 +131,22 @@ _DRY_RUN_STUB = "tests: []\nnotes: dry-run"
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--report", required=True, help="Path to cve_patch.yaml")
+    parser.add_argument("--in", dest="input_path", required=True, help="Path to a cve-3-fixes.yaml report")
     parser.add_argument("--agent", choices=["claude", "claude_cli"], default="claude_cli")
     parser.add_argument("--model", default="sonnet-5")
     parser.add_argument("--max-turns", type=int, default=30)
     parser.add_argument("--timeout", type=int, default=1800)
     parser.add_argument("--test-timeout", type=int, default=300, help="Per-run timeout for executing each generated test")
-    parser.add_argument("--output", help="Report path (default: output/triage/<CVE-ID>/cve_verified.yaml)")
+    parser.add_argument("--out", dest="output_path", help="Report path (default: output/triage/<CVE-ID>/cve-4-tests.yaml)")
     parser.add_argument("--dry-run", action="store_true", help="Build the prompt but don't call the agent or run tests")
     args = parser.parse_args(argv)
 
-    patch_report = tc.load_report(args.report)
+    patch_report = tc.load_report(args.input_path)
     cve_id = patch_report["cve_id"]
-    output_path = args.output or tc.default_report_path(cve_id, "cve_verified.yaml")
+    output_path = args.output_path or tc.default_report_path(cve_id, "cve-4-tests.yaml")
 
     if patch_report.get("skipped"):
-        print(f"cve_patch.yaml for {cve_id} was skipped ({patch_report.get('reason')}) -- nothing to verify.")
+        print(f"cve-3-fixes.yaml for {cve_id} was skipped ({patch_report.get('reason')}) -- nothing to verify.")
         tc.write_report(output_path, {
             "cve_id": cve_id, "generated_at": tc.timestamp(),
             "skipped": True, "reason": "upstream patch step was skipped",
@@ -248,7 +248,7 @@ def main(argv=None):
         "generated_at": tc.timestamp(),
         "agent": args.agent,
         "model": args.model,
-        "patch_report_path": args.report,
+        "in_path": args.input_path,
         "tests": tests_report,
         "overall_verdict": overall_verdict,
         "notes": test_plan.get("notes"),

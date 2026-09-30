@@ -238,6 +238,93 @@ as `TUTORIAL-py.md`'s, substituting `javascript`):
   CodeQL JavaScript library docs (pulled into `codeql_javascript_stdlib` by
   `qlcoder fetch-docs` above) for the exact API.
 
+## 12. (Experimental) Direct agentic triage: `cve_coder.py`
+
+Separate from the CodeQL query-synthesis pipeline above (Sections 6–11) is
+a much lighter-weight prototype: instead of synthesizing a reusable CodeQL
+query and grading it against pre-/post-fix databases, a coding agent reads
+the checked-out repo directly and produces a finding, a fix, and a
+regression test that proves the fix — no CodeQL database, no CodeQL LSP
+server, no ChromaDB at all. See
+[`../DEV/readme-approach.md`](../DEV/readme-approach.md) section 6 for why
+this exists and how it compares to the pipeline above; this section is
+just the "how do I run it" walkthrough.
+
+Because there's no CodeQL DB/LSP/Chroma involved, you can skip Sections
+2/7/8/9 above entirely for this path — all you need is Sections 0/1(skip
+CodeQL itself, just the venv)/3/4/5 (the venv + `.env` with
+`QLCODER_LANGUAGE=javascript` + an agent CLI/API key) and a CVE already in
+`data/project_info-js.csv`.
+
+Try the smallest, fastest CVE first — `CVE-2017-16042` (`node-growl`),
+since it's a tiny single-file package with a real method-body-level fix:
+
+```sh
+# sanity-check the wiring first, without spending any agent calls:
+python3 scripts/cve_coder.py pipeline --cve-id CVE-2017-16042 --dry-run
+
+# the real run:
+python3 scripts/cve_coder.py pipeline --cve-id CVE-2017-16042 \
+    --agent claude_cli --model sonnet-5
+```
+
+This runs all four stages in order — `spec` (fetch NVD metadata, clone/
+checkout the repo, no agent call), `detect` (agent reads the code, judges
+whether the vulnerability is really there), `patch` (agent fixes it on an
+isolated clone), `verify` (agent writes a regression test and runs it
+against both the original and patched checkouts) — then writes a summary.
+Results land at:
+
+```
+output/triage/CVE-2017-16042/
+├── cve-1-metadata.yaml   # NVD description/CWE + repo/commit info
+├── cve-2-findings.yaml   # what the agent found: file(s), line(s), reasoning
+├── cve-3-fixes.yaml      # what it changed: fix description + the actual on-disk code
+├── cve-4-tests.yaml      # the regression test it wrote + PASS/FAILED on both checkouts
+└── cve-5-pipeline.yaml   # one-line-per-stage summary + overall_status
+```
+
+Open `cve-5-pipeline.yaml` first — its `overall_status` tells you at a
+glance whether the whole chain worked (`EFFECTIVE`), the fix didn't hold up
+(`FIX_FAILED`), the test never actually demonstrated the bug
+(`INCONCLUSIVE`), or the CVE wasn't confirmed vulnerable in the first place
+(`SKIPPED_NOT_VULNERABLE`) — then drill into the individual
+`cve-N-*.yaml` files for the full trace behind that verdict.
+
+If `overall_status` isn't `EFFECTIVE`, try letting it retry automatically:
+```sh
+python3 scripts/cve_coder.py pipeline --cve-id CVE-2017-16042 \
+    --agent claude_cli --model sonnet-5 --max-iters 3
+```
+This re-runs `patch`→`verify` as up to 3 rounds, feeding each round's
+verify failure back into the next round's patch attempt, stopping early
+the first round that comes back `EFFECTIVE`. Round outputs are kept as
+`cve-3-fixes-iter-<N>.yaml`/`cve-4-tests-iter-<N>.yaml` so you can see what
+changed between attempts.
+
+To run one stage at a time instead of the full pipeline (useful for
+inspecting each report before letting the agent proceed, or re-running
+just one stage):
+```sh
+python3 scripts/cve_coder.py spec   --cve-id CVE-2017-16042
+python3 scripts/cve_coder.py detect --in output/triage/CVE-2017-16042/cve-1-metadata.yaml
+python3 scripts/cve_coder.py patch  --in output/triage/CVE-2017-16042/cve-2-findings.yaml
+python3 scripts/cve_coder.py verify --in output/triage/CVE-2017-16042/cve-3-fixes.yaml
+```
+
+`python3 scripts/cve_coder.py --help` (and `... <command> --help`) lists
+every option — `--max-turns`/`--timeout` (agent-CLI limits),
+`--force` (patch/verify anyway even if not confirmed vulnerable), `--iter`
+(label a manual re-run without overwriting the previous attempt's report).
+
+**This path is newer and less exercised than the CodeQL pipeline above —
+it has only been smoke-tested with `--dry-run` so far, never against a
+live agent.** If something breaks on a real run, that's useful signal in
+itself; check `docs/DEV/readme-approach.md` section 6 for the known,
+already-flagged limitations (e.g. the generated regression test isn't
+independently checked for actually exercising the vulnerability) before
+assuming it's something new.
+
 ## Adding more JavaScript CVEs
 
 To add your own, append a row to `data/project_info-js.csv` (repo/commit

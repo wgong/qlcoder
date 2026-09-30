@@ -6,6 +6,7 @@ works). Each is runnable standalone and communicates with the next only via
 a YAML report on disk -- no shared process, no CodeQL DB/LSP/vector DB.
 See docs/DEV/readme-approach.md section 6 for the design this implements.
 """
+import contextlib
 import csv
 import glob
 import json
@@ -104,6 +105,20 @@ def ensure_repo_checked_out(cve_id: str, row: Dict) -> Optional[str]:
     return repo_dir if process_cve(cve_id, cve_info) else None
 
 
+def get_head_commit(repo_dir: str) -> Optional[str]:
+    """The repo's current HEAD commit SHA, or None if it can't be determined
+    (e.g. not actually a git repo). Used to fill in `vulnerable_commit` when
+    a caller supplies --repo-path without --commit -- leaving it unset
+    would otherwise crash the later `git checkout None` in clone_local."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_dir, check=True, capture_output=True, text=True,
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError:
+        return None
+
+
 def clone_local(src_repo_dir: str, dest_dir: str, checkout_commit: str) -> bool:
     """Cheap local clone (`git clone <local-path>`) so patch/verify steps can
     mutate a separate working copy without touching the vulnerable checkout
@@ -123,6 +138,63 @@ def clone_local(src_repo_dir: str, dest_dir: str, checkout_commit: str) -> bool:
     except subprocess.CalledProcessError as e:
         print(f"  Error cloning {src_repo_dir} -> {dest_dir}: {e.stderr}")
         return False
+
+
+SKILLS_SRC_DIR = os.path.join(QL_CODER_ROOT_DIR, "src", "skills")
+
+
+def available_skill_names(step: str, language: Optional[str]) -> List[str]:
+    """Names (`cve-<step>-common`, `cve-<step>-<language>`) of the skills that
+    exist under src/skills/<step>/ for this language. Missing ones are skipped."""
+    subs = ["common"] + ([language] if language else [])
+    return [f"cve-{step}-{s}" for s in subs
+            if os.path.isfile(os.path.join(SKILLS_SRC_DIR, step, s, "SKILL.md"))]
+
+
+@contextlib.contextmanager
+def skills_installed(step: str, language: Optional[str], cwd: str):
+    """Copy src/skills/<step>/{common,<language>} into <cwd>/.claude/skills/
+    for the duration of one agent call, then remove them.
+
+    Claude Code only discovers `.claude/skills/<name>/SKILL.md`, so each
+    source dir is copied under the `name:` in its SKILL.md frontmatter
+    (cve-<step>-common, cve-<step>-<language>). `.claude/` is added to the
+    checkout's local .git/info/exclude so the copies never show up in
+    `git status` or in a patch diff. Yields the installed skill names.
+    """
+    installed = available_skill_names(step, language)
+    skills_root = os.path.join(cwd, ".claude", "skills")
+    had_claude_dir = os.path.isdir(os.path.join(cwd, ".claude"))
+    for name in installed:
+        sub = name[len(f"cve-{step}-"):]
+        shutil.copytree(os.path.join(SKILLS_SRC_DIR, step, sub),
+                        os.path.join(skills_root, name), dirs_exist_ok=True)
+    if installed:
+        _exclude_from_git(cwd, ".claude/")
+    try:
+        yield installed
+    finally:
+        for name in installed:
+            shutil.rmtree(os.path.join(skills_root, name), ignore_errors=True)
+        if installed and not had_claude_dir:
+            shutil.rmtree(os.path.join(cwd, ".claude"), ignore_errors=True)
+
+
+def _exclude_from_git(repo_dir: str, pattern: str) -> None:
+    """Append `pattern` to the repo's local .git/info/exclude (never committed)."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--git-path", "info/exclude"],
+            cwd=repo_dir, check=True, capture_output=True, text=True,
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return  # not a git checkout; nothing to keep clean
+    path = out if os.path.isabs(out) else os.path.join(repo_dir, out)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    existing = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
+    if pattern not in existing.splitlines():
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(("" if existing.endswith("\n") or not existing else "\n") + pattern + "\n")
 
 
 def run_agent_cli(
@@ -189,18 +261,34 @@ def run_agent_cli(
 
 
 def extract_assistant_text(stdout: str) -> str:
-    """Pull the final assistant text out of `claude --output-format json` output."""
+    """Pull the agent's final reply text out of `claude --print` output.
+
+    `claude --print --output-format json` (what run_agent_cli actually
+    uses) is NOT a list of turn events -- it's a single JSON object for the
+    whole run, with the final assistant text in its `result` field. (A
+    list-of-events shape only shows up under `--output-format
+    stream-json`, which this codebase doesn't use; handled below too, only
+    as a defensive fallback in case that ever changes.) Silently falling
+    through to the raw JSON string on a shape mismatch is what caused a
+    real bug here before: yaml.safe_load() happily parses JSON (it's a
+    YAML subset), so a mis-detected shape doesn't fail loudly -- it just
+    silently hands the CLI's own metadata dict back as if it were the
+    agent's answer, with all the fields the caller expects simply absent.
+    """
     try:
-        objs = json.loads(stdout)
-        if isinstance(objs, list):
-            for obj in reversed(objs):
-                if obj.get("type") == "assistant":
-                    blocks = obj.get("message", {}).get("content", [])
-                    parts = [b["text"] for b in blocks if b.get("type") == "text"]
-                    if parts:
-                        return "\n".join(parts).strip()
+        data = json.loads(stdout)
     except Exception:
-        pass
+        return stdout
+    if isinstance(data, dict):
+        return data.get("result", stdout)
+    if isinstance(data, list):
+        parts = []
+        for obj in data:
+            if isinstance(obj, dict) and obj.get("type") == "assistant":
+                blocks = obj.get("message", {}).get("content", [])
+                parts += [b["text"] for b in blocks if isinstance(b, dict) and b.get("type") == "text"]
+        if parts:
+            return "\n\n".join(parts).strip()
     return stdout
 
 
@@ -208,10 +296,16 @@ _YAML_BLOCK_RE = re.compile(r"```ya?ml\s*\n(.*?)```", re.DOTALL)
 
 
 def extract_yaml_block(text: str) -> Dict:
-    """Pull the first fenced ```yaml block out of an agent's free-text reply.
-    Every prompt in this prototype asks the agent to end its reply with one."""
-    match = _YAML_BLOCK_RE.search(text)
-    candidate = match.group(1) if match else text
+    """Pull the LAST fenced ```yaml block out of an agent's free-text reply.
+
+    Last, not first: every prompt in this prototype asks the agent to end
+    its reply with one, but across a concatenated multi-turn transcript
+    (see extract_assistant_text) an agent occasionally quotes its own
+    schema back while explaining the task before actually producing its
+    real report later on, so the last match is the more reliable one.
+    """
+    matches = _YAML_BLOCK_RE.findall(text)
+    candidate = matches[-1] if matches else text
     try:
         data = yaml.safe_load(candidate)
         if isinstance(data, dict):
@@ -237,7 +331,17 @@ def timestamp() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S")
 
 
-def default_report_path(cve_id: str, filename: str) -> str:
+def default_report_path(cve_id: str, filename: str, iter_num: Optional[int] = None) -> str:
+    """Default path for one of the cve-<n>-*.yaml reports.
+
+    Pass iter_num for a stage that's looping over refinement attempts
+    (currently cve_detect.py / cve_patch.py, via their --iter option) to
+    get e.g. cve-3-fixes-iter-2.yaml instead of cve-3-fixes.yaml, so each
+    attempt's report is kept rather than overwritten.
+    """
+    if iter_num is not None:
+        name, ext = os.path.splitext(filename)
+        filename = f"{name}-iter-{iter_num}{ext}"
     return os.path.join(TRIAGE_OUTPUT_DIR, cve_id, filename)
 
 
